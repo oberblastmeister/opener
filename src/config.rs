@@ -7,8 +7,8 @@ use serde_derive::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Config {
-    open: Vec<HashMap<String, String>>,
-    preview: Vec<HashMap<String, String>>,
+    pub open: Vec<HashMap<String, String>>,
+    pub preview: Vec<HashMap<String, String>>,
 }
 
 impl Config {
@@ -21,18 +21,18 @@ impl Config {
         ))
     }
 
-    pub fn get_mime_types(&mut self) -> HashMap<Mime, String> {
-        let mimes_and_commands: HashMap<mime::Mime, String> = self
+    pub fn get_mime_types(&mut self) -> HashMap<Mime, &str> {
+        let mimes_and_commands: HashMap<mime::Mime, &str> = self
             .open
             .first_mut()
             .unwrap()
-            .drain()
+            .iter()
             .map(|(mime_str, command)| {
                 let mime: Result<Mime> = mime_str.parse().context(format!(
                     "Failed to parse mime type from string {}",
                     mime_str
                 ));
-                mime.map(|m| (m, command))
+                mime.map(|m| (m, &**command))
             })
             // log errors
             .inspect(|r| {
@@ -45,5 +45,10 @@ impl Config {
             .collect();
         debug!("mime_strs were parsed into mime_types: {:?}", mimes_and_commands);
         mimes_and_commands
+    }
+
+    pub fn store(self) -> Result<()> {
+        confy::store("opener", self)?;
+        Ok(())
     }
 }
