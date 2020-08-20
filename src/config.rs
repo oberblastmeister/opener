@@ -7,8 +7,8 @@ use serde_derive::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub open: Vec<BTreeMap<String, String>>,
-    pub preview: Vec<BTreeMap<String, String>>,
+    pub open: Vec<HashMap<String, String>>,
+    pub preview: Vec<HashMap<String, String>>,
 }
 
 impl Config {
@@ -21,8 +21,8 @@ impl Config {
         ))
     }
 
-    pub fn get_mime_types(&mut self) -> BTreeMap<Mime, &str> {
-        let mimes_and_commands: BTreeMap<mime::Mime, &str> = self
+    pub fn get_mime_types(&mut self) -> HashMap<Mime, &str> {
+        let mimes_and_commands: HashMap<mime::Mime, &str> = self
             .open
             .first_mut()
             .unwrap()

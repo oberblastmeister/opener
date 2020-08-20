@@ -3,7 +3,7 @@ use crate::mime_helpers::{filter_matches, get_mime_from_path, remove_star_mimes}
 use anyhow::{anyhow, bail, Context, Result};
 use log::*;
 use mime::Mime;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{self, Command};
@@ -55,7 +55,7 @@ impl SubCommand {
     }
 }
 
-fn run_open(path: impl AsRef<Path>, mimes_and_commands: BTreeMap<Mime, &str>) -> Result<()> {
+fn run_open(path: impl AsRef<Path>, mimes_and_commands: HashMap<Mime, &str>) -> Result<()> {
     let guess = get_mime_from_path(&path)?;
     debug!("Guess: {:?}", guess);
 
