@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use mime::Mime;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::Path;
 
 fn test_mime_equal(m1: &Mime, m2: &Mime) -> bool {
@@ -69,15 +69,15 @@ pub fn get_mime_from_path(path: impl AsRef<Path>) -> Result<Mime> {
 
 pub fn filter_matches(
     mime_match: Mime,
-    mimes_and_commands: HashMap<Mime, &str>,
-) -> HashMap<Mime, &str> {
+    mimes_and_commands: BTreeMap<Mime, &str>,
+) -> BTreeMap<Mime, &str> {
     mimes_and_commands
         .into_iter()
         .filter(|(mime, _command)| test_mime_equal(&mime_match, mime))
         .collect()
 }
 
-pub fn remove_star_mimes(mimes_and_commands: HashMap<Mime, &str>) -> HashMap<Mime, &str> {
+pub fn remove_star_mimes(mimes_and_commands: BTreeMap<Mime, &str>) -> BTreeMap<Mime, &str> {
     mimes_and_commands
         .into_iter()
         .filter(|(mime, _command)| mime.subtype().as_str() != "*" && mime.type_().as_str() != "*")

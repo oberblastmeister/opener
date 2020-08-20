@@ -3,7 +3,7 @@ use crate::mime_helpers::{filter_matches, get_mime_from_path, remove_star_mimes}
 use anyhow::{anyhow, bail, Context, Result};
 use log::*;
 use mime::Mime;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{self, Command};
@@ -55,7 +55,7 @@ impl SubCommand {
     }
 }
 
-fn run_open(path: impl AsRef<Path>, mimes_and_commands: HashMap<Mime, &str>) -> Result<()> {
+fn run_open(path: impl AsRef<Path>, mimes_and_commands: BTreeMap<Mime, &str>) -> Result<()> {
     let guess = get_mime_from_path(&path)?;
     debug!("Guess: {:?}", guess);
 
@@ -87,13 +87,16 @@ fn run_add(extension_mime_path: String, command: String, mut cfg: Config) -> Res
     debug!("Run add is using this config: {:?}", cfg);
 
     let mut inserted = false;
-    for fallback in cfg.open.iter_mut() {
-        debug!("Fall back: {:?}", fallback);
-        if fallback.contains_key(mime_str) {
-            debug!("{:?} contains key {}", fallback, mime_str);
+    for table in cfg.open.iter_mut() {
+        debug!("Fall back: {:?}", table);
+        if table.contains_key(mime_str) {
+            debug!("{:?} contains key {}", table, mime_str);
             continue;
         }
-        if fallback.insert(mime_string.clone(), command.clone()).is_some() {
+        if table
+            .insert(mime_string.clone(), command.clone())
+            .is_some()
+        {
             panic!("BUG: there should not be that key in table because the table should have been skipped above")
         }
         inserted = true;
@@ -103,11 +106,14 @@ fn run_add(extension_mime_path: String, command: String, mut cfg: Config) -> Res
     // if nothing was inserted
     if !inserted {
         // there must have been no tables to insert in so create a new one
-        cfg.open.push(HashMap::new());
+        cfg.open.push(BTreeMap::new());
     }
 
     // then insert to the table that was just created
-    cfg.open.last_mut().expect("BUG: cfg should not be empty").insert(mime_string, command);
+    cfg.open
+        .last_mut()
+        .expect("BUG: cfg should not be empty")
+        .insert(mime_string, command);
     cfg.store()?;
 
     Ok(())
