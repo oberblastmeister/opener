@@ -14,6 +14,13 @@ pub struct Opt {
 pub enum SubCommand {
     Open {
         #[structopt(parse(from_os_str))]
-        file: PathBuf
+        path: PathBuf
+    },
+    Add {
+        extension_or_mime: String
+    },
+    Preview {
+        #[structopt(parse(from_os_str))]
+        path: PathBuf
     }
 }

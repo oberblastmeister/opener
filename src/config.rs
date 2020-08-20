@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use log::*;
-use serde_derive::{Deserialize, Serialize};
 use mime::Mime;
+use serde_derive::{Deserialize, Serialize};
 
 #[derive(Default, Debug, Serialize, Deserialize)]
 pub struct Config {
-    mime_types: HashMap<String, String>,
+    open: Vec<HashMap<String, String>>,
+    preview: Vec<HashMap<String, String>>,
 }
 
 impl Config {
@@ -21,23 +22,28 @@ impl Config {
     }
 
     pub fn get_mime_types(&mut self) -> HashMap<Mime, String> {
-        let mimes: HashMap<mime::Mime, String> = self
-            .mime_types
+        let mimes_and_commands: HashMap<mime::Mime, String> = self
+            .open
+            .first_mut()
+            .unwrap()
             .drain()
-            .map(|(k, v)| {
-                let mime: Result<Mime> = k
-                    .parse()
-                    .context(format!("Failed to parse mime type from string {}", k));
-                mime.map(|m| (m, v))
+            .map(|(mime_str, command)| {
+                let mime: Result<Mime> = mime_str.parse().context(format!(
+                    "Failed to parse mime type from string {}",
+                    mime_str
+                ));
+                mime.map(|m| (m, command))
             })
+            // log errors
             .inspect(|r| {
                 if let Err(e) = r {
                     warn!("{:?}", e);
                 }
             })
+            // then ignore errors
             .filter_map(|e| e.ok())
             .collect();
-        debug!("{:?}", mimes);
-        mimes
+        debug!("mime_strs were parsed into mime_types: {:?}", mimes_and_commands);
+        mimes_and_commands
     }
 }
