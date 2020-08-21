@@ -1,17 +1,23 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use log::*;
+use toml_edit::Document;
 use mime::Mime;
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct Config {
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct OpenConfig {
     pub open: Vec<HashMap<String, String>>,
     pub preview: Vec<HashMap<String, String>>,
 }
 
-impl Config {
+impl OpenConfig {
+    pub fn create_default()  -> Result<()> {
+        confy::store("opener", Self::default())?;
+        Ok(())
+    }
+
     pub fn load() -> Result<Self> {
         let cfg_name = "opener";
 
@@ -54,4 +60,8 @@ impl Config {
         confy::store("opener", self)?;
         Ok(())
     }
+}
+
+struct EditConfig {
+    doc: Document,
 }

@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::OpenConfig;
 use crate::mime_helpers::{filter_matches, get_mime_from_path, remove_star_mimes};
 use anyhow::{anyhow, bail, Context, Result};
 use log::*;
@@ -35,7 +35,7 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-    pub fn run(self, mut cfg: Config) -> Result<()> {
+    pub fn run(self, mut cfg: OpenConfig) -> Result<()> {
         let mimes_and_commands = cfg.get_mime_types();
 
         match self {
@@ -79,7 +79,7 @@ fn run_open(path: impl AsRef<Path>, mimes_and_commands: HashMap<Mime, &str>) -> 
     Ok(())
 }
 
-fn run_add(extension_mime_path: String, command: String, mut cfg: Config) -> Result<()> {
+fn run_add(extension_mime_path: String, command: String, mut cfg: OpenConfig) -> Result<()> {
     let mime = AddType::determine(&extension_mime_path)?.convert_to_mime()?;
     let mime_str = mime.essence_str();
     let mime_string = mime_str.to_string();

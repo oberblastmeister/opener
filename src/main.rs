@@ -12,7 +12,7 @@ use env_logger::Builder;
 use log::*;
 use structopt::StructOpt;
 
-use config::Config;
+use config::OpenConfig;
 use error::print_error;
 use mime_helpers::{filter_matches, get_mime_from_path, remove_star_mimes};
 use opt::{Opt, SubCommand};
@@ -35,7 +35,7 @@ fn run() -> Result<()> {
 
     trace!("{:?}", &opt);
 
-    let cfg = Config::load()?;
+    let cfg = OpenConfig::load()?;
     debug!("The config was loaded: {:?}", &cfg);
 
     opt.subcmd.run(cfg)?;
