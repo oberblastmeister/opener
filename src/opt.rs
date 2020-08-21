@@ -80,40 +80,37 @@ fn run_open(path: impl AsRef<Path>, mimes_and_commands: BTreeMap<Mime, &str>) ->
 }
 
 fn run_add(extension_mime_path: String, command: String, mut cfg: Config) -> Result<()> {
-    let add_type = AddType::determine(&extension_mime_path);
-    let mime = add_type.convert_to_mime()?;
+    let mime = AddType::determine(&extension_mime_path)?.convert_to_mime()?;
     let mime_str = mime.essence_str();
     let mime_string = mime_str.to_string();
     debug!("Run add is using this config: {:?}", cfg);
 
-    let mut inserted = false;
+    let mut should_append = true;
     for table in cfg.open.iter_mut() {
         debug!("Fall back: {:?}", table);
-        if table.contains_key(mime_str) {
-            debug!("{:?} contains key {}", table, mime_str);
-            continue;
+        if let Some(value) = table.get(mime_str) {
+            if value == &command {
+                info!("{} already has a command", &extension_mime_path);
+                should_append = false;
+                break;
+            } else {
+                continue;
+            }
         }
-        if table
-            .insert(mime_string.clone(), command.clone())
-            .is_some()
-        {
+        if table.insert(mime_string.clone(), command.clone()).is_some() {
             panic!("BUG: there should not be that key in table because the table should have been skipped above")
         }
-        inserted = true;
+        should_append = false;
         break;
     }
 
     // if nothing was inserted
-    if !inserted {
+    if should_append {
         // there must have been no tables to insert in so create a new one
-        cfg.open.push(BTreeMap::new());
+        let mut map = BTreeMap::new();
+        map.insert(mime_string, command);
+        cfg.open.push(map);
     }
-
-    // then insert to the table that was just created
-    cfg.open
-        .last_mut()
-        .expect("BUG: cfg should not be empty")
-        .insert(mime_string, command);
     cfg.store()?;
 
     Ok(())
@@ -145,25 +142,24 @@ enum AddType<'a> {
     Extension(&'a str),
     Mime(mime::Mime),
     Path(&'a Path),
-    Unknown,
 }
 
 impl<'a> AddType<'a> {
-    fn determine(candidate: &'a str) -> Self {
+    fn determine(candidate: &'a str) -> Result<Self> {
         if candidate.starts_with('.') {
-            return AddType::Extension(candidate);
+            return Ok(AddType::Extension(candidate));
         }
 
         if let Ok(mime) = candidate.parse::<mime::Mime>() {
-            return AddType::Mime(mime);
+            return Ok(AddType::Mime(mime));
         }
 
         let path = Path::new(candidate);
         if path.exists() {
-            return AddType::Path(path);
+            return Ok(AddType::Path(path));
         }
 
-        AddType::Unknown
+        bail!("The supplied string is not an extension, mime, or path.");
     }
 
     fn convert_to_mime(&self) -> Result<mime::Mime> {
@@ -175,7 +171,6 @@ impl<'a> AddType<'a> {
             .ok_or(anyhow!("No mime type found from extension {}", ext))?),
             AddType::Mime(mime) => Ok(mime.clone()),
             AddType::Path(path) => get_mime_from_path(path),
-            AddType::Unknown => bail!("Unknown add_type"),
         }
     }
 }
