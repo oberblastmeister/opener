@@ -3,7 +3,7 @@ use mime::Mime;
 use std::collections::HashMap;
 use std::path::Path;
 
-fn test_mime_equal(m1: &Mime, m2: &Mime) -> bool {
+fn mime_equal(m1: &Mime, m2: &Mime) -> bool {
     let m1_type = m1.type_().as_str();
     let m1_subtype = m1.subtype().as_str();
     let m2_type = m2.type_().as_str();
@@ -37,32 +37,6 @@ fn tree_magic_mime(path: impl AsRef<Path>) -> Result<Mime> {
     ))
 }
 
-/// Compares to mime types. If they are equal returns Some(mime type). If one contains a star it
-/// returns the more specific of the two mime types. For example "text/*" compared with
-/// "text/plain" will yeild Some("text/plain") because that is the more specific mime_type. If the
-/// mime types are equal it will just return one of the mime types. If the mime types are not equal
-/// in any way this will return None.
-fn compare_mimes(m1: Mime, m2: Mime) -> Option<Mime> {
-    let m1_type = m1.type_().as_str();
-    let m1_subtype = m1.subtype().as_str();
-    let m2_type = m2.type_().as_str();
-    let m2_subtype = m2.subtype().as_str();
-
-    if m1 == m2 {
-        return Some(m1);
-    }
-
-    if m1_type == m2_type {
-        if m2_subtype == "*" {
-            return Some(m1);
-        } else if m1_subtype == "*" {
-            return Some(m2);
-        }
-    }
-
-    None
-}
-
 pub fn get_mime_from_path(path: impl AsRef<Path>) -> Result<Mime> {
     Ok(mime_guess::from_path(&path).first_or(tree_magic_mime(&path)?))
 }
@@ -73,7 +47,7 @@ pub fn filter_matches(
 ) -> HashMap<Mime, &str> {
     mimes_and_commands
         .into_iter()
-        .filter(|(mime, _command)| test_mime_equal(&mime_match, mime))
+        .filter(|(mime, _command)| mime_equal(&mime_match, mime))
         .collect()
 }
 
