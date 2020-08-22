@@ -1,6 +1,6 @@
 use anyhow::{bail, Context, Result};
 use mime::Mime;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::Path;
 
 fn test_mime_equal(m1: &Mime, m2: &Mime) -> bool {
