@@ -3,6 +3,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use toml_edit::{ArrayOfTables, Document, Item, Table};
 
 /// The config that will be parsed into if editing the toml file is needed.
+#[derive(Debug)]
 pub struct EditConfig {
     doc: Document,
 }
@@ -44,5 +45,9 @@ impl EditConfig {
 
     pub fn store(&self) -> Result<()> {
         store_string(&self.doc.to_string())
+    }
+
+    pub fn to_string(&self) -> String {
+        self.doc.to_string()
     }
 }

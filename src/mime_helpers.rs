@@ -3,7 +3,7 @@ use mime::Mime;
 use std::collections::HashMap;
 use std::path::Path;
 
-fn mime_equal(m1: &Mime, m2: &Mime) -> bool {
+pub fn mime_equal(m1: &Mime, m2: &Mime) -> bool {
     let m1_type = m1.type_().as_str();
     let m1_subtype = m1.subtype().as_str();
     let m2_type = m2.type_().as_str();
@@ -37,21 +37,23 @@ fn tree_magic_mime(path: impl AsRef<Path>) -> Result<Mime> {
     ))
 }
 
-pub fn get_mime_from_path(path: impl AsRef<Path>) -> Result<Mime> {
+/// Determines the mime type from the given path. First uses the extension and then uses tree_magic
+/// if using the extension failed.
+pub fn determine_mime(path: impl AsRef<Path>) -> Result<Mime> {
     Ok(mime_guess::from_path(&path).first_or(tree_magic_mime(&path)?))
 }
 
-pub fn filter_matches(
+pub fn filter_by_mimes(
     mime_match: Mime,
-    mimes_and_commands: HashMap<Mime, &str>,
-) -> HashMap<Mime, &str> {
+    mimes_and_commands: HashMap<Mime, String>,
+) -> HashMap<Mime, String> {
     mimes_and_commands
         .into_iter()
         .filter(|(mime, _command)| mime_equal(&mime_match, mime))
         .collect()
 }
 
-pub fn remove_star_mimes(mimes_and_commands: HashMap<Mime, &str>) -> HashMap<Mime, &str> {
+pub fn remove_star_mimes(mimes_and_commands: HashMap<Mime, String>) -> HashMap<Mime, String> {
     mimes_and_commands
         .into_iter()
         .filter(|(mime, _command)| mime.subtype().as_str() != "*" && mime.type_().as_str() != "*")

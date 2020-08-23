@@ -1,3 +1,4 @@
+use crate::mime_helpers::*;
 use anyhow::{anyhow, bail, Context, Result};
 use log::*;
 use mime::Mime;
@@ -69,14 +70,71 @@ fn convert_hashmap(map: HashMap<String, String>) -> HashMap<Mime, String> {
 /// is used because it is quick and easy but cannot be used to modify the contents of the toml
 /// file, only read them. That is why it is called `OpenConfig` because it is only used to open
 /// files and will only need read-only data.
+#[derive(Debug)]
 pub struct OpenConfig {
-    pub open: Vec<HashMap<Mime, String>>,
-    pub preview: Vec<HashMap<Mime, String>>,
+    pub open: Vec<Possible>,
+    pub preview: Vec<Possible>,
 }
 
 impl OpenConfig {
     /// Loads the config
     pub fn load() -> Result<Self> {
         Ok(OpenConfigString::load()?.convert())
+    }
+}
+
+#[derive(Debug)]
+pub struct Possible(HashMap<Mime, String>);
+
+impl Possible {
+    /// Narrows down the possible commands to one according to the mime type given. The returns the
+    /// proper command that was narrowed down.
+    pub fn narrow(self, mime: Mime) -> String {
+        // first filter them so that only mimes that are equal are kept, including star mimes.
+        // application/* == application/pdf is true
+        self = self.filter_equal(mime);
+        debug!("Matches before narrowing down to 1: {:?}", self);
+
+        if self.matches_not_one() {
+            // if there are still more matches, remove the star mimes because each mime type can
+            // only have two possible matches, the specific and star. For example application/pdf
+            // only has two matches, application/pdf and application/*. If star is removed, the
+            // command for application/pdf is left.
+            self = self.remove_star_mimes();
+        }
+        debug!("Matches after narrowing down to 1: {:?}", self);
+
+        // there should only be one match left
+        if self.matches_not_one() {
+            panic!("BUG: matches length should not be greater than 1. Toml file should have non-repeating strings. After removing stars there can only be one match for each mime type.")
+        }
+
+        // there is only one match left so this just returns the command associated with it.
+        self.0.into_iter().map(|(mime, command)| command).collect()
+    }
+
+    fn filter_equal(self, mime_match: Mime) -> Self {
+        let map: HashMap<Mime, String> = self
+            .0
+            .into_iter()
+            .filter(|(mime, _command)| mime_equal(&mime_match, mime))
+            .collect();
+        Possible(map)
+    }
+
+    /// Removes the mimes and commands that have star mimes like text/*
+    fn remove_star_mimes(self) -> Self {
+        let map: HashMap<Mime, String> = self
+            .0
+            .into_iter()
+            .filter(|(mime, _command)| {
+                mime.subtype().as_str() != "*" && mime.type_().as_str() != "*"
+            })
+            .collect();
+        Possible(map)
+    }
+
+    fn matches_not_one(&self) -> bool {
+        self.0.len() > 1
     }
 }

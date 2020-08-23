@@ -1,13 +1,17 @@
-use crate::config::OpenConfig;
-use crate::mime_helpers::{filter_matches, get_mime_from_path, remove_star_mimes};
-use anyhow::{anyhow, bail, Context, Result};
-use log::*;
-use mime::Mime;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::{self, Command};
 use structopt::StructOpt;
+
+use anyhow::{anyhow, bail, Context, Result};
+use log::*;
+use mime::Mime;
+
+use crate::config::EditConfig;
+use crate::config::OpenConfig;
+use crate::config::Possible;
+use crate::mime_helpers::{determine_mime, filter_by_mimes, remove_star_mimes};
 
 #[derive(Debug, StructOpt)]
 pub struct Opt {
@@ -35,9 +39,7 @@ pub enum SubCommand {
 }
 
 impl SubCommand {
-    pub fn run(self, mut cfg: OpenConfig) -> Result<()> {
-        let mimes_and_commands = cfg.get_mime_types();
-
+    pub fn run(self) -> Result<()> {
         match self {
             SubCommand::Open { path } => {
                 run_open(path, mimes_and_commands)?;
@@ -55,61 +57,88 @@ impl SubCommand {
     }
 }
 
-fn run_open(path: impl AsRef<Path>, mimes_and_commands: HashMap<Mime, &str>) -> Result<()> {
-    let guess = get_mime_from_path(&path)?;
-    debug!("Guess: {:?}", guess);
+fn run_open(path: impl AsRef<Path>) -> Result<()> {
+    // load open open config, we don't need preview because we are only running open
+    let OpenConfig { open, preview: _ } = OpenConfig::load()?;
 
-    let mut matches = filter_matches(guess, mimes_and_commands);
-    debug!("Matches before narrowing down to 1: {:?}", matches);
+    // The mime type of the path that we are opening
+    let mime = determine_mime(path)?;
+    debug!("Guess: {:?}", mime);
 
-    if matches.len() > 1 {
-        matches = remove_star_mimes(matches);
+    // wheather and of the commands specified in config file was run succesfully
+    let mut command_successful = false;
+    for possible in open {
+        // finds the correct command according to the mime
+        let command = possible.narrow(mime);
+        if run_shell_command(&command, path).is_ok() {
+            command_successful = true;
+            break;
+        }
     }
 
-    debug!("Matches after narrowing down to 1: {:?}", matches);
-
-    if matches.len() > 1 {
-        panic!("BUG: matches length should not be greater than 1. Toml file should have non-repeating strings. After removing stars there can only be one match for each mime type.")
-    }
-
-    for (_mime, command) in matches {
-        run_shell_command(&command, &path)?;
+    // if none of the commands were run succesfully or there were no commands specified, use
+    // xdg-open instead
+    if !command_successful {
+        info!("Using xdg-open instead");
+        xdg_open();
     }
 
     Ok(())
 }
 
+fn xdg_open() {
+    todo!()
+}
+
 fn run_add(extension_mime_path: String, command: String, mut cfg: OpenConfig) -> Result<()> {
+    let cfg = EditConfig::load()?;
     let mime = AddType::determine(&extension_mime_path)?.convert_to_mime()?;
     let mime_str = mime.essence_str();
     let mime_string = mime_str.to_string();
-    debug!("Run add is using this config: {:?}", cfg);
+    debug!("Run add is using this config: {}", cfg.to_string());
 
-    let mut should_append = true;
-    for table in cfg.open.iter_mut() {
-        debug!("Fall back: {:?}", table);
-        if let Some(value) = table.get(mime_str) {
-            if value == &command {
+    let mut should_append_table = true;
+    let idx = 0;
+    // for each table in open
+    while let Some(table) = cfg.get_open()?.get_mut(idx) {
+        debug!("Table: {:?}", table);
+
+        // if there is already a key in the table
+        if let Some(value) = table.entry(mime_str).as_value() {
+            // check if the value is equal to the command added
+            if value.as_str().expect("BUG: command should be a string") == &command {
+                // if the value is equal, the command for the associated mime type is already
+                // there, do nothing
                 info!("{} already has a command", &extension_mime_path);
-                should_append = false;
+                // do not create a table, we are adding something that is already there
+                should_append_table = false;
                 break;
             } else {
+                // if there is already a key but the value is not the same, skip this table and go
+                // to the next one
+                idx += 1;
                 continue;
             }
+        } else {
+            // if there is not already the specified mime_str in the table, check just to make sure
+            if table.get(mime_str).is_some() {
+                panic!("BUG: there should not be that key in table because the table should have been skipped above");
+            }
+            // insert pair
+            let mut inserted = table.entry(mime_str);
+            table[mime_str] = toml_edit::value(command);
+            // should_append_table is false because there is already a table and it has been
+            // inserted in
+            should_append_table = false;
         }
-        if table.insert(mime_string.clone(), command.clone()).is_some() {
-            panic!("BUG: there should not be that key in table because the table should have been skipped above")
-        }
-        should_append = false;
-        break;
     }
 
-    // if nothing was inserted
-    if should_append {
+    // if there are no more tables
+    if should_append_table {
         // there must have been no tables to insert in so create a new one
-        let mut map = BTreeMap::new();
-        map.insert(mime_string, command);
-        cfg.open.push(map);
+        let mut table = toml_edit::Table::new();
+        table[mime_str] = toml_edit::value(command);
+        cfg.get_open()?.append(table);
     }
     cfg.store()?;
 
@@ -124,7 +153,9 @@ fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     let mut child = Command::new(cmd).arg(path).spawn()?;
 
-    let ecode = child.wait()?;
+    let ecode = child
+        .wait()
+        .context(format!("Failed to wait on child command {}", cmd))?;
 
     if !ecode.success() {
         bail!(
@@ -170,7 +201,7 @@ impl<'a> AddType<'a> {
             .first()
             .ok_or(anyhow!("No mime type found from extension {}", ext))?),
             AddType::Mime(mime) => Ok(mime.clone()),
-            AddType::Path(path) => get_mime_from_path(path),
+            AddType::Path(path) => determine_mime(path),
         }
     }
 }

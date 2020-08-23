@@ -14,7 +14,7 @@ use structopt::StructOpt;
 
 use config::OpenConfig;
 use error::print_error;
-use mime_helpers::{filter_matches, get_mime_from_path, remove_star_mimes};
+use mime_helpers::{filter_by_mimes, determine_mime, remove_star_mimes};
 use opt::{Opt, SubCommand};
 
 fn start_logger(opt: &Opt) {
@@ -35,10 +35,7 @@ fn run() -> Result<()> {
 
     trace!("{:?}", &opt);
 
-    let cfg = OpenConfig::load()?;
-    debug!("The config was loaded: {:?}", &cfg);
-
-    opt.subcmd.run(cfg)?;
+    opt.subcmd.run()?;
 
     Ok(())
 }
