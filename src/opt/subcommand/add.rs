@@ -65,7 +65,7 @@ impl Runable for Add {
         if should_append_table {
             // there must have been no tables to insert in so create a new one
             let mut table = toml_edit::Table::new();
-            table[mime_str] = toml_edit::value(self.command);
+            table[mime_str] = toml_edit::value(self.command.clone());
             cfg.get_open()?.append(table);
         }
         cfg.store()?;

@@ -1,14 +1,13 @@
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use log::*;
 
-use crate::config::{Possible, OpenConfig};
-use crate::mime_helpers::determine_mime;
-use super::SubCommand;
-use super::StructOpt;
 use super::Runable;
+use super::StructOpt;
+use crate::config::{OpenConfig, Possible};
+use crate::mime_helpers::determine_mime;
 
 #[derive(StructOpt, Debug)]
 pub struct Open {
@@ -84,11 +83,13 @@ trait OpenOrPreview {
     }
 }
 
+/// Open something using the default program on the system
 fn xdg_open(path: impl AsRef<Path>) -> Result<()> {
     open::that(path.as_ref().as_os_str()).context("Failed to use xdg-open")?;
     Ok(())
 }
 
+/// Run shell command and return Ok(()) if successful
 fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
     let mut child = Command::new(cmd).arg(path).spawn()?;
