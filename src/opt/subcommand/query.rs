@@ -15,7 +15,7 @@ pub struct Query {
 }
 
 impl Runable for Query {
-    fn run(&self) -> Result<()> {
+    fn run(self) -> Result<()> {
         match self.addtype {
             AddType::Mime(ref mime) => {
                 let extensions = mime_guess::get_mime_extensions(&mime)

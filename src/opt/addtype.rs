@@ -25,7 +25,7 @@ impl TryFrom<&str> for AddType {
             return Ok(AddType::Extension(value.chars().skip(1).collect()));
         }
 
-        if let Ok(mime) = value.parse::<mime::Mime>() {
+        if let Ok(mime) = value.parse::<Mime>() {
             return Ok(AddType::Mime(mime));
         }
 
@@ -39,12 +39,12 @@ impl TryFrom<&str> for AddType {
 }
 
 impl AddType {
-    pub fn convert_to_mime(&self) -> Result<Mime> {
+    pub fn convert_to_mime(self) -> Result<Mime> {
         match self {
             AddType::Extension(ext) => Ok(mime_guess::from_ext(&ext)
                 .first()
                 .ok_or(anyhow!("No mime type found from extension {}", ext))?),
-            AddType::Mime(mime) => Ok(mime.clone()),
+            AddType::Mime(mime) => Ok(mime),
             AddType::Path(path) => determine_mime(path),
         }
     }

@@ -16,11 +16,11 @@ pub struct Opt {
 }
 
 pub trait Runable {
-    fn run(&self) -> Result<()>;
+    fn run(self) -> Result<()>;
 }
 
 impl Runable for Opt {
-    fn run(&self) -> Result<()> {
+    fn run(self) -> Result<()> {
         self.subcmd.run()
     }
 }

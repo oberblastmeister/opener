@@ -23,7 +23,7 @@ pub enum SubCommand {
 }
 
 impl Runable for SubCommand {
-    fn run(&self) -> Result<()> {
+    fn run(self) -> Result<()> {
         match self {
             SubCommand::Open(open) => open.run(),
             SubCommand::Add(add) => add.run(),

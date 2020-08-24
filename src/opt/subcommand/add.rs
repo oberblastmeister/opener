@@ -1,5 +1,6 @@
 use anyhow::Result;
 use log::*;
+use toml_edit::ArrayOfTables;
 
 use super::parse_addtype;
 use super::AddType;
@@ -10,22 +11,33 @@ use crate::config::EditConfig;
 #[derive(StructOpt, Debug)]
 pub struct Add {
     #[structopt(parse(try_from_str = parse_addtype))]
+    /// can be a file extension, path, or mime type
     addtype: AddType,
 
+    /// the command to add for the addtype
     command: String,
+
+    #[structopt(long, short)]
+    /// Wheather to add to preview. Defaults to adding to open.
+    preview: bool,
 }
 
 impl Runable for Add {
-    fn run(&self) -> Result<()> {
+    fn run(self) -> Result<()> {
         let mut cfg = EditConfig::load()?;
-        let mime = self.addtype.convert_to_mime()?;
-        let mime_str = mime.essence_str();
         debug!("Run add is using this config: {}", cfg.to_string());
 
-        let mut should_append_table = true;
+        let mime = self.addtype.convert_to_mime()?;
+        let mime_str = mime.essence_str();
+        let array = if self.preview {
+            cfg.get_preview()?
+        } else {
+            cfg.get_open()?
+        };
+
         let mut idx = 0;
         // for each table in open
-        while let Some(table) = cfg.get_open()?.get_mut(idx) {
+        while let Some(table) = array.get_mut(idx) {
             debug!("Table: {:?}", table);
 
             // if there is already a key in the table
@@ -36,8 +48,7 @@ impl Runable for Add {
                     // there, do nothing
                     info!("The mime {} already has a command", mime);
                     // do not create a table, we are adding something that is already there
-                    should_append_table = false;
-                    break;
+                    return Ok(());
                 } else {
                     // if there is already a key but the value is not the same, skip this table and go
                     // to the next one
@@ -53,23 +64,26 @@ impl Runable for Add {
                     }
                 }
                 // insert pair
-                table[mime_str] = toml_edit::value(self.command.clone());
+                table[mime_str] = toml_edit::value(self.command);
                 // should_append_table is false because there is already a table and it has been
                 // inserted in
-                should_append_table = false;
-                break;
+                return Ok(());
             }
         }
 
         // if there are no more tables
-        if should_append_table {
-            // there must have been no tables to insert in so create a new one
-            let mut table = toml_edit::Table::new();
-            table[mime_str] = toml_edit::value(self.command.clone());
-            cfg.get_open()?.append(table);
-        }
+        // there must have been no tables to insert in so create a new one
+        let mut table = toml_edit::Table::new();
+        table[mime_str] = toml_edit::value(self.command);
+        array.append(table);
         cfg.store()?;
 
         Ok(())
     }
 }
+
+// fn append_table(array: &mut ArrayOfTables) -> Result<()> {
+//     let mut table = toml_edit::Table::new();
+//     table[mime_str] = toml_edit::value(self.command);
+//     array.append(table);
+// }
