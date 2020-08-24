@@ -8,13 +8,9 @@ use log::*;
 use crate::config::EditConfig;
 use crate::config::OpenConfig;
 use crate::mime_helpers::determine_mime;
-use super::addtype::AddType;
+use super::addtype::{parse_addtype, AddType};
 
 use super::StructOpt;
-
-fn parse_addtype(src: &str) -> Result<AddType> {
-    Ok(AddType::determine(src)?)
-}
 
 #[derive(Debug, StructOpt)]
 pub enum SubCommand {
@@ -26,7 +22,9 @@ pub enum SubCommand {
         pick: bool,
     },
     Add {
-        extension_mime_path: String,
+        #[structopt(parse(try_from_str = parse_addtype))]
+        addtype: AddType,
+
         command: String,
     },
     Preview {
@@ -37,7 +35,8 @@ pub enum SubCommand {
         pick: bool,
     },
     Query {
-        extension_mime_path: String,
+        #[structopt(parse(try_from_str = parse_addtype))]
+        addtype: AddType,
     },
 }
 
@@ -48,14 +47,14 @@ impl SubCommand {
                 run_open_or_preview(path, &self, pick)?;
             }
             SubCommand::Add {
-                extension_mime_path,
+                addtype,
                 command,
             } => {
-                run_add(extension_mime_path, command)?;
+                run_add(addtype, command)?;
             }
             SubCommand::Query {
-                extension_mime_path,
-            } => run_query(&extension_mime_path)?,
+                addtype,
+            } => run_query(addtype)?,
             _ => (),
         }
 
@@ -107,9 +106,8 @@ fn xdg_open(path: impl AsRef<Path>) -> Result<()> {
     Ok(())
 }
 
-fn run_query(extension_mime_path: &String) -> Result<()> {
-    let query_type = AddType::determine(&extension_mime_path)?;
-    match query_type {
+fn run_query(addtype: AddType) -> Result<()> {
+    match addtype {
         AddType::Mime(mime) => {
             let extensions = mime_guess::get_mime_extensions(&mime)
                 .ok_or(anyhow!("No mime types found for given extension"))?;
@@ -136,9 +134,9 @@ fn run_query(extension_mime_path: &String) -> Result<()> {
     Ok(())
 }
 
-fn run_add(extension_mime_path: String, command: String) -> Result<()> {
+fn run_add(addtype: AddType, command: String) -> Result<()> {
     let mut cfg = EditConfig::load()?;
-    let mime = AddType::determine(&extension_mime_path)?.convert_to_mime()?;
+    let mime = addtype.convert_to_mime()?;
     let mime_str = mime.essence_str();
     debug!("Run add is using this config: {}", cfg.to_string());
 
@@ -154,7 +152,7 @@ fn run_add(extension_mime_path: String, command: String) -> Result<()> {
             if value.as_str().expect("BUG: command should be a string") == &command {
                 // if the value is equal, the command for the associated mime type is already
                 // there, do nothing
-                info!("{} already has a command", &extension_mime_path);
+                info!("The mime {} already has a command", mime);
                 // do not create a table, we are adding something that is already there
                 should_append_table = false;
                 break;
@@ -168,7 +166,7 @@ fn run_add(extension_mime_path: String, command: String) -> Result<()> {
             // if there is not already the specified mime_str in the table, check just to make sure
             if let Some(value) = table.get(mime_str) {
                 debug!("Option<Item>: {:?}", value);
-                if let Some(s) = value.as_str() {
+                if let Some(_) = value.as_str() {
                     panic!("Hash to be Item: None")
                 }
             }
@@ -196,6 +194,7 @@ fn run_add(extension_mime_path: String, command: String) -> Result<()> {
 fn run_preview() {
     todo!()
 }
+
 
 fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
