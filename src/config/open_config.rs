@@ -26,18 +26,10 @@ impl OpenConfigString {
     /// Converts `OpenConfigString` into `OpenConfig`
     fn convert(self) -> OpenConfig {
         let OpenConfigString { open, preview } = self;
-        let open = convert_section(open);
-        let preview = convert_section(preview);
+        let open = Possible::convert_map(open);
+        let preview = Possible::convert_map(preview);
         OpenConfig { open, preview }
     }
-}
-
-/// Converts runs convert_hashmap() on all hashmaps in the vector
-fn convert_section(section: Vec<HashMap<String, String>>) -> Vec<HashMap<Mime, String>> {
-    section
-        .into_iter()
-        .map(|hashmap| convert_hashmap(hashmap))
-        .collect()
 }
 
 /// Converts a hashmap of mime strings and commands into a hashmap of mimes and commands. This
@@ -87,9 +79,16 @@ impl OpenConfig {
 pub struct Possible(HashMap<Mime, String>);
 
 impl Possible {
+    pub fn convert_map(map: Vec<HashMap<String, String>>) -> Vec<Possible> {
+        map
+            .into_iter()
+            .map(|hashmap| Possible(convert_hashmap(hashmap)))
+            .collect()
+    }
+
     /// Narrows down the possible commands to one according to the mime type given. The returns the
     /// proper command that was narrowed down.
-    pub fn narrow(self, mime: Mime) -> String {
+    pub fn narrow(mut self, mime: &Mime) -> String {
         // first filter them so that only mimes that are equal are kept, including star mimes.
         // application/* == application/pdf is true
         self = self.filter_equal(mime);
@@ -113,11 +112,11 @@ impl Possible {
         self.0.into_iter().map(|(mime, command)| command).collect()
     }
 
-    fn filter_equal(self, mime_match: Mime) -> Self {
+    fn filter_equal(self, mime_match: &Mime) -> Self {
         let map: HashMap<Mime, String> = self
             .0
             .into_iter()
-            .filter(|(mime, _command)| mime_equal(&mime_match, mime))
+            .filter(|(mime, _command)| mime_equal(mime_match, mime))
             .collect();
         Possible(map)
     }

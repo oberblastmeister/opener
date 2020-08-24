@@ -1,5 +1,5 @@
 use super::{store_string, load_to_string};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::Result;
 use toml_edit::{ArrayOfTables, Document, Item, Table};
 
 /// The config that will be parsed into if editing the toml file is needed.
@@ -11,21 +11,21 @@ pub struct EditConfig {
 impl EditConfig {
     pub fn load() -> Result<Self> {
         let toml_string = load_to_string()?;
-        let mut doc = toml_string.parse::<Document>().expect("invalid doc");
+        let doc = toml_string.parse::<Document>().expect("invalid doc");
         Ok(EditConfig { doc })
     }
 
-    pub fn root(&self) -> &mut Item {
+    pub fn root(&mut self) -> &mut Item {
         &mut self.doc.root
     }
 
-    pub fn root_table(&self) -> &mut Table {
+    pub fn root_table(&mut self) -> &mut Table {
         self.root()
             .as_table_mut()
             .expect("The the root item should always be a table.")
     }
 
-    pub fn get_open(&self) -> Result<&mut ArrayOfTables> {
+    pub fn get_open(&mut self) -> Result<&mut ArrayOfTables> {
         let array = self
             .root_table()
             .entry("open")
@@ -34,7 +34,7 @@ impl EditConfig {
         Ok(array)
     }
 
-    pub fn get_preview(&self) -> Result<&mut ArrayOfTables> {
+    pub fn get_preview(&mut self) -> Result<&mut ArrayOfTables> {
         let array = self
             .root_table()
             .entry("preview")

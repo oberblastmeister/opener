@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::ErrorKind;
@@ -7,11 +6,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
 use directories::ProjectDirs;
-use log::*;
-use mime::Mime;
-use serde::{de::DeserializeOwned, Serialize};
-use serde_derive::{Deserialize, Serialize};
-use toml_edit::Document;
 
 const DEFAULT_CONFIG: &'static str = r#"
 [[open]]
@@ -61,10 +55,10 @@ fn store_default(path: impl AsRef<Path>) -> Result<&'static str> {
 /// Loads a file to string or creates a default if it does not exist, then returns the default
 /// string
 fn load_to_string_or_default(path: impl AsRef<Path>) -> Result<String> {
-    match File::open(path) {
-        Ok(file) => Ok(file.get_string()?),
-        Err(e) if e.kind() == ErrorKind::NotFound => Ok(store_default(path)?.to_string()),
-        Err(e) => bail!("General load error"),
+    match File::open(&path) {
+        Ok(mut file) => Ok(file.get_string()?),
+        Err(e) if e.kind() == ErrorKind::NotFound => Ok(store_default(&path)?.to_string()),
+        Err(_e) => bail!("General load error"),
     }
 }
 

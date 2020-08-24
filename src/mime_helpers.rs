@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use mime::Mime;
-use std::collections::HashMap;
 use std::path::Path;
 
 pub fn mime_equal(m1: &Mime, m2: &Mime) -> bool {
@@ -41,23 +40,6 @@ fn tree_magic_mime(path: impl AsRef<Path>) -> Result<Mime> {
 /// if using the extension failed.
 pub fn determine_mime(path: impl AsRef<Path>) -> Result<Mime> {
     Ok(mime_guess::from_path(&path).first_or(tree_magic_mime(&path)?))
-}
-
-pub fn filter_by_mimes(
-    mime_match: Mime,
-    mimes_and_commands: HashMap<Mime, String>,
-) -> HashMap<Mime, String> {
-    mimes_and_commands
-        .into_iter()
-        .filter(|(mime, _command)| mime_equal(&mime_match, mime))
-        .collect()
-}
-
-pub fn remove_star_mimes(mimes_and_commands: HashMap<Mime, String>) -> HashMap<Mime, String> {
-    mimes_and_commands
-        .into_iter()
-        .filter(|(mime, _command)| mime.subtype().as_str() != "*" && mime.type_().as_str() != "*")
-        .collect()
 }
 
 #[cfg(test)]

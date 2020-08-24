@@ -3,19 +3,15 @@ mod error;
 mod mime_helpers;
 mod opt;
 
-use std::borrow::Cow;
-use std::path::Path;
-use std::process::{self, Command};
+use std::process;
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::Result;
 use env_logger::Builder;
 use log::*;
 use structopt::StructOpt;
 
-use config::OpenConfig;
 use error::print_error;
-use mime_helpers::{filter_by_mimes, determine_mime, remove_star_mimes};
-use opt::{Opt, SubCommand};
+use opt::Opt;
 
 fn start_logger(opt: &Opt) {
     Builder::from_default_env()
