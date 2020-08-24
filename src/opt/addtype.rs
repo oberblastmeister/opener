@@ -1,4 +1,4 @@
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
 use std::convert::TryFrom;
 
 use anyhow::{anyhow, bail, Result};
@@ -39,12 +39,12 @@ impl TryFrom<&str> for AddType {
 }
 
 impl AddType {
-    pub fn convert_to_mime(self) -> Result<Mime> {
+    pub fn convert_to_mime(&self) -> Result<Mime> {
         match self {
             AddType::Extension(ext) => Ok(mime_guess::from_ext(&ext)
                 .first()
                 .ok_or(anyhow!("No mime type found from extension {}", ext))?),
-            AddType::Mime(mime) => Ok(mime),
+            AddType::Mime(mime) => Ok(mime.clone()),
             AddType::Path(path) => determine_mime(path),
         }
     }

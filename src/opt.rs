@@ -2,6 +2,7 @@ mod subcommand;
 mod addtype;
 
 use structopt::StructOpt;
+use anyhow::Result;
 
 use subcommand::SubCommand;
 
@@ -12,4 +13,14 @@ pub struct Opt {
 
     #[structopt(subcommand)]
     pub subcmd: SubCommand,
+}
+
+pub trait Runable {
+    fn run(&self) -> Result<()>;
+}
+
+impl Runable for Opt {
+    fn run(&self) -> Result<()> {
+        self.subcmd.run()
+    }
 }

@@ -12,6 +12,7 @@ use structopt::StructOpt;
 
 use error::print_error;
 use opt::Opt;
+use opt::Runable;
 
 fn start_logger(opt: &Opt) {
     Builder::from_default_env()
@@ -31,7 +32,7 @@ fn run() -> Result<()> {
 
     trace!("{:?}", &opt);
 
-    opt.subcmd.run()?;
+    opt.run()?;
 
     Ok(())
 }
