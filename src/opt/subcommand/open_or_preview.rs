@@ -69,7 +69,12 @@ fn xdg_open(path: impl AsRef<Path>) -> Result<()> {
 /// Run shell command and return Ok(()) if successful
 fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
-    let mut child = Command::new(cmd).arg(path).spawn()?;
+    let mut args = cmd.split(' ');
+    let mut command = Command::new(args.next().expect("Command has to have one"));
+    for arg in args {
+        command.arg(arg);
+    }
+    let mut child = command.spawn()?;
 
     let ecode = child
         .wait()

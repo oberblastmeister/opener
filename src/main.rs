@@ -14,6 +14,7 @@ use error::print_error;
 use opt::Opt;
 use opt::Runable;
 
+/// Start the logger depending on the verbosity flag
 fn start_logger(opt: &Opt) {
     Builder::from_default_env()
         .filter_level(
@@ -25,6 +26,7 @@ fn start_logger(opt: &Opt) {
         .init();
 }
 
+/// Run the app
 fn run() -> Result<()> {
     let opt = Opt::from_args();
 

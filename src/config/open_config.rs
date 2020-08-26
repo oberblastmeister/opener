@@ -1,11 +1,12 @@
-use crate::mime_helpers::*;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result};
 use log::*;
 use mime::Mime;
+use rayon::prelude::*;
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 
 use super::load_to_string;
+use crate::mime_helpers::*;
 
 /// What the config will serialize into at first. This will then be converted into `OpenConfig` to
 /// use `Mime`s instead of `String`s.
@@ -26,36 +27,10 @@ impl OpenConfigString {
     /// Converts `OpenConfigString` into `OpenConfig`
     fn convert(self) -> OpenConfig {
         let OpenConfigString { open, preview } = self;
-        let open = Possible::convert_map(open);
-        let preview = Possible::convert_map(preview);
+        let open = Possible::new_vec(open);
+        let preview = Possible::new_vec(preview);
         OpenConfig { open, preview }
     }
-}
-
-/// Converts a hashmap of mime strings and commands into a hashmap of mimes and commands. This
-/// function will log the errors using warn! and then discard them.
-fn convert_hashmap(map: HashMap<String, String>) -> HashMap<Mime, String> {
-    let converted = map
-        .into_iter()
-        .map(|(mime_str, command)| {
-            let mime: Result<Mime> = mime_str.parse().context(format!(
-                "Failed to parse mime type from string {}",
-                mime_str
-            ));
-            mime.map(|m| (m, command))
-        })
-        // log errors
-        .inspect(|r| {
-            if let Err(e) = r {
-                warn!("{:?}", e);
-            }
-        })
-        // then ignore errors
-        .filter_map(|e| e.ok())
-        .collect();
-    debug!("mime_strs were parsed into mime_types: {:?}", converted);
-
-    converted
 }
 
 /// The actual config that will be parsed into because it uses `Mime`s instead of `String`s. This config
@@ -75,18 +50,46 @@ impl OpenConfig {
     }
 }
 
+/// The possible mimes and commands that can be used to open a file
 #[derive(Debug)]
 pub struct Possible(HashMap<Mime, String>);
 
 impl Possible {
-    pub fn convert_map(map: Vec<HashMap<String, String>>) -> Vec<Possible> {
-        map
-            .into_iter()
-            .map(|hashmap| Possible(convert_hashmap(hashmap)))
+    /// Converts a hashmap of mime strings and commands into a hashmap of mimes and commands. This
+    /// function will log the errors using warn! and then discard them.
+    pub fn new(map: HashMap<String, String>) -> Possible {
+        let converted: HashMap<Mime, String> = map
+            .into_par_iter()
+            .map(|(mime_str, command)| {
+                let mime: Result<Mime> = mime_str.parse().context(format!(
+                    "Failed to parse mime type from string {}",
+                    mime_str
+                ));
+                mime.map(|m| (m, command))
+            })
+            // log errors
+            .inspect(|r| {
+                if let Err(e) = r {
+                    warn!("{:?}", e);
+                }
+            })
+            // then ignore errors
+            .filter_map(|e| e.ok())
+            .collect();
+        debug!("mime_strs were parsed into mime_types: {:?}", converted);
+
+        Possible(converted)
+    }
+
+    /// Creates a new vector of possibles. The first possible is the main one used while the other
+    /// ones are just fall backs
+    pub fn new_vec(map: Vec<HashMap<String, String>>) -> Vec<Possible> {
+        map.into_par_iter()
+            .map(|hashmap| Possible::new(hashmap))
             .collect()
     }
 
-    /// Narrows down the possible commands to one according to the mime type given. The returns the
+    /// Narrows down the possible commands to one according to the mime type given. Then returns the
     /// proper command that was narrowed down.
     pub fn narrow(mut self, mime: &Mime) -> String {
         // first filter them so that only mimes that are equal are kept, including star mimes.
@@ -109,13 +112,13 @@ impl Possible {
         }
 
         // there is only one match left so this just returns the command associated with it.
-        self.0.into_iter().map(|(mime, command)| command).collect()
+        self.0.into_iter().map(|(_mime, command)| command).collect()
     }
 
     fn filter_equal(self, mime_match: &Mime) -> Self {
         let map: HashMap<Mime, String> = self
             .0
-            .into_iter()
+            .into_par_iter()
             .filter(|(mime, _command)| mime_equal(mime_match, mime))
             .collect();
         Possible(map)
@@ -125,7 +128,7 @@ impl Possible {
     fn remove_star_mimes(self) -> Self {
         let map: HashMap<Mime, String> = self
             .0
-            .into_iter()
+            .into_par_iter()
             .filter(|(mime, _command)| {
                 mime.subtype().as_str() != "*" && mime.type_().as_str() != "*"
             })

@@ -2,7 +2,6 @@ use std::convert::TryFrom;
 
 use anyhow::Result;
 use log::*;
-use toml_edit::ArrayOfTables;
 use mime::Mime;
 
 use super::parse_addtype;
@@ -88,9 +87,3 @@ impl Runable for Set {
         Ok(())
     }
 }
-
-// fn append_table(array: &mut ArrayOfTables) -> Result<()> {
-//     let mut table = toml_edit::Table::new();
-//     table[mime_str] = toml_edit::value(self.command);
-//     array.append(table);
-// }

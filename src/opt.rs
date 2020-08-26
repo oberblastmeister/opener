@@ -6,6 +6,8 @@ use anyhow::Result;
 
 use subcommand::SubCommand;
 
+/// A tool to unify and make easier xdg-mime and xdg-open. Specify commands for mime types in it's
+/// toml config file which allows comments. Falls back to xdg-open if nothing is specified
 #[derive(Debug, StructOpt)]
 pub struct Opt {
     #[structopt(flatten)]
