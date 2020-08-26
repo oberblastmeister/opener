@@ -33,6 +33,7 @@ pub fn store_string(s: &str) -> Result<()> {
     Ok(())
 }
 
+/// Opens file with the correct options
 fn open_file(path: impl AsRef<Path>) -> Result<File> {
     Ok(OpenOptions::new()
         .write(true)
@@ -76,6 +77,7 @@ fn get_config_path() -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Get the string that represents the config directory for the system
 fn get_config_dir_str(project: &ProjectDirs) -> Result<&str> {
     project
         .config_dir()
@@ -83,6 +85,7 @@ fn get_config_dir_str(project: &ProjectDirs) -> Result<&str> {
         .ok_or(anyhow!("Failed to get config dir str"))
 }
 
+/// Something that is able to read a string from
 trait CheckedStringRead {
     fn get_string(&mut self) -> Result<String, io::Error>;
 }

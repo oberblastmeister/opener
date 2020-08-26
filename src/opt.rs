@@ -1,5 +1,5 @@
 mod subcommand;
-mod addtype;
+mod ext_mime_path;
 
 use structopt::StructOpt;
 use anyhow::Result;

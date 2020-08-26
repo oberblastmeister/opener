@@ -6,18 +6,18 @@ use log::*;
 
 use super::Runable;
 use super::StructOpt;
-use crate::config::{OpenConfig, Possible};
+use crate::config::OpenConfig;
 use crate::mime_helpers::determine_mime;
 
 #[derive(StructOpt, Debug)]
 pub struct Open {
     #[structopt(parse(from_os_str))]
-    /// the path to open
+    /// the file to open
     path: PathBuf,
 
     /// enter interactive mode
     #[structopt(short, long)]
-    pick: bool,
+    interactive: bool,
 
     /// preview the file
     #[structopt(short, long)]

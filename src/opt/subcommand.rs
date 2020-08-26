@@ -1,24 +1,21 @@
-mod add;
+mod set;
 mod open_or_preview;
 mod query;
 
-use std::path::PathBuf;
-
 use anyhow::Result;
 
-use super::addtype::{parse_addtype, AddType};
+use super::ext_mime_path::{parse_addtype, ExtMimePath};
 
 use super::StructOpt;
 use super::Runable;
-use add::Add;
-use open_or_preview::{Preview, Open};
+use set::Set;
+use open_or_preview::Open;
 use query::Query;
 
 #[derive(Debug, StructOpt)]
 pub enum SubCommand {
     Open(Open),
-    Add(Add),
-    Preview(Preview),
+    Set(Set),
     Query(Query),
 }
 
@@ -26,8 +23,7 @@ impl Runable for SubCommand {
     fn run(self) -> Result<()> {
         match self {
             SubCommand::Open(open) => open.run(),
-            SubCommand::Add(add) => add.run(),
-            SubCommand::Preview(preview) => preview.run(),
+            SubCommand::Set(add) => add.run(),
             SubCommand::Query(query) => query.run(),
         }
     }

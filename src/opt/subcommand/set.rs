@@ -1,33 +1,36 @@
+use std::convert::TryFrom;
+
 use anyhow::Result;
 use log::*;
 use toml_edit::ArrayOfTables;
+use mime::Mime;
 
 use super::parse_addtype;
-use super::AddType;
+use super::ExtMimePath;
 use super::Runable;
 use super::StructOpt;
 use crate::config::EditConfig;
 
 #[derive(StructOpt, Debug)]
-pub struct Add {
-    #[structopt(parse(try_from_str = parse_addtype))]
+pub struct Set {
     /// can be a file extension, path, or mime type
-    addtype: AddType,
+    #[structopt(parse(try_from_str = parse_addtype))]
+    ext_mime_path: ExtMimePath,
 
-    /// the command to add for the addtype
+    /// the command to add for the extension, path, or mime type
     command: String,
 
+    /// weather to set preview instead of setting the open command
     #[structopt(long, short)]
-    /// Wheather to add to preview. Defaults to adding to open.
     preview: bool,
 }
 
-impl Runable for Add {
+impl Runable for Set {
     fn run(self) -> Result<()> {
         let mut cfg = EditConfig::load()?;
-        debug!("Run add is using this config: {}", cfg.to_string());
+        debug!("Run add is using this config:\n{}", cfg.to_string());
 
-        let mime = self.addtype.convert_to_mime()?;
+        let mime = Mime::try_from(self.ext_mime_path)?;
         let mime_str = mime.essence_str();
         let array = if self.preview {
             cfg.get_preview()?
@@ -64,15 +67,18 @@ impl Runable for Add {
                     }
                 }
                 // insert pair
+                info!("inserting pair into table");
                 table[mime_str] = toml_edit::value(self.command);
                 // should_append_table is false because there is already a table and it has been
                 // inserted in
+                cfg.store()?;
                 return Ok(());
             }
         }
 
         // if there are no more tables
         // there must have been no tables to insert in so create a new one
+        info!("Appending new table");
         let mut table = toml_edit::Table::new();
         table[mime_str] = toml_edit::value(self.command);
         array.append(table);
