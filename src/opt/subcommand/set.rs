@@ -11,9 +11,10 @@ use super::Runable;
 use super::StructOpt;
 use crate::config::EditConfig;
 
+/// Set the correct command for an extension, mime, or path
 #[derive(StructOpt, Debug)]
 pub struct Set {
-    /// can be a file extension, path, or mime type
+    /// can be a file extension, mime, or path
     #[structopt(parse(try_from_str = parse_addtype))]
     ext_mime_path: ExtMimePath,
 

@@ -9,6 +9,7 @@ use super::StructOpt;
 use crate::config::OpenConfig;
 use crate::mime_helpers::determine_mime;
 
+/// Open or preview a file with the correct program
 #[derive(StructOpt, Debug)]
 pub struct Open {
     #[structopt(parse(from_os_str))]
