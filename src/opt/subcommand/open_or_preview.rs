@@ -3,15 +3,16 @@ use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use log::*;
+use subprocess::Exec;
 
 use super::Runable;
 use super::StructOpt;
 use crate::config::OpenConfig;
 use crate::mime_helpers::determine_mime;
 
-/// Open or preview a file with the correct program
+/// Options to use for subcommand open
 #[derive(StructOpt, Debug)]
-pub struct Open {
+pub struct OpenOptions {
     #[structopt(parse(from_os_str))]
     /// the file to open
     path: PathBuf,
@@ -25,7 +26,7 @@ pub struct Open {
     preview: bool,
 }
 
-impl Runable for Open {
+impl Runable for OpenOptions {
     fn run(self) -> Result<()> {
         let possible = if self.preview {
             let OpenConfig { open: _, preview } = OpenConfig::load()?;
@@ -69,18 +70,9 @@ fn xdg_open(path: impl AsRef<Path>) -> Result<()> {
 /// Run shell command and return Ok(()) if successful
 fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
     let path = path.as_ref();
-    let mut args = cmd.split(' ');
-    let mut command = Command::new(args.next().expect("Command has to have one"));
-    for arg in args {
-        command.arg(arg);
-    }
-    let mut child = command.spawn()?;
+    let exit_status = Exec::shell(cmd).join()?;
 
-    let ecode = child
-        .wait()
-        .context(format!("Failed to wait on child command {}", cmd))?;
-
-    if !ecode.success() {
+    if !exit_status.success() {
         bail!(
             "The child command {} with path {} failed",
             cmd,

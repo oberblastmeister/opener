@@ -8,9 +8,9 @@ use super::Runable;
 use super::StructOpt;
 use crate::mime_helpers::determine_mime;
 
-/// Query for mime types or extensions
+/// Options to use for subcommand query
 #[derive(StructOpt, Debug)]
-pub struct Query {
+pub struct QueryOptions {
     /// Can be a file extension, path, or mime type If the argument is an extension or path, it
     /// prints the mime type associated with it. If The argument is a mime type, it prints out all
     /// the extensions associated with it.
@@ -18,7 +18,7 @@ pub struct Query {
     ext_mime_path: ExtMimePath,
 }
 
-impl Runable for Query {
+impl Runable for QueryOptions {
     fn run(self) -> Result<()> {
         match self.ext_mime_path {
             ExtMimePath::Mime(mime) => {

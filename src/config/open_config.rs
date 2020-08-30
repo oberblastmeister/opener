@@ -1,19 +1,25 @@
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use log::*;
 use mime::Mime;
 use rayon::prelude::*;
+use regex::Regex;
 use serde_derive::Deserialize;
-use std::collections::HashMap;
 
 use super::load_to_string;
 use crate::mime_helpers::*;
+
+type PossibleStrings = HashMap<String, String>;
 
 /// What the config will serialize into at first. This will then be converted into `OpenConfig` to
 /// use `Mime`s instead of `String`s.
 #[derive(Debug, Default, Deserialize)]
 struct OpenConfigString {
-    open: Vec<HashMap<String, String>>,
-    preview: Vec<HashMap<String, String>>,
+    open: Vec<PossibleStrings>,
+    open_regex: Vec<PossibleStrings>,
+    preview: Vec<PossibleStrings>,
+    preview_regex: Vec<PossibleStrings>,
 }
 
 impl OpenConfigString {
@@ -26,10 +32,20 @@ impl OpenConfigString {
 
     /// Converts `OpenConfigString` into `OpenConfig`
     fn convert(self) -> OpenConfig {
-        let OpenConfigString { open, preview } = self;
-        let open = Possible::new_vec(open);
-        let preview = Possible::new_vec(preview);
-        OpenConfig { open, preview }
+        let OpenConfigString {
+            open,
+            open_regex,
+            preview,
+            preview_regex,
+        } = self;
+        let open = PossibleMimes::new_vec(open);
+        let preview = PossibleMimes::new_vec(preview);
+        OpenConfig {
+            open,
+            open_regex,
+            preview,
+            preview_regex,
+        }
     }
 }
 
@@ -39,8 +55,10 @@ impl OpenConfigString {
 /// files and will only need read-only data.
 #[derive(Debug)]
 pub struct OpenConfig {
-    pub open: Vec<Possible>,
-    pub preview: Vec<Possible>,
+    pub open: Vec<PossibleMimes>,
+    pub open_regex: Vec<PossibleStrings>,
+    pub preview: Vec<PossibleMimes>,
+    pub preview_regex: Vec<PossibleStrings>,
 }
 
 impl OpenConfig {
@@ -52,12 +70,12 @@ impl OpenConfig {
 
 /// The possible mimes and commands that can be used to open a file
 #[derive(Debug)]
-pub struct Possible(HashMap<Mime, String>);
+pub struct PossibleMimes(HashMap<Mime, String>);
 
-impl Possible {
+impl PossibleMimes {
     /// Converts a hashmap of mime strings and commands into a hashmap of mimes and commands. This
     /// function will log the errors using warn! and then discard them.
-    pub fn new(map: HashMap<String, String>) -> Possible {
+    pub fn new(map: PossibleStrings) -> PossibleMimes {
         let converted: HashMap<Mime, String> = map
             .into_par_iter()
             .map(|(mime_str, command)| {
@@ -78,14 +96,14 @@ impl Possible {
             .collect();
         debug!("mime_strs were parsed into mime_types: {:?}", converted);
 
-        Possible(converted)
+        PossibleMimes(converted)
     }
 
     /// Creates a new vector of possibles. The first possible is the main one used while the other
     /// ones are just fall backs
-    pub fn new_vec(map: Vec<HashMap<String, String>>) -> Vec<Possible> {
+    pub fn new_vec(map: Vec<PossibleStrings>) -> Vec<PossibleMimes> {
         map.into_par_iter()
-            .map(|hashmap| Possible::new(hashmap))
+            .map(|hashmap| PossibleMimes::new(hashmap))
             .collect()
     }
 
@@ -121,7 +139,7 @@ impl Possible {
             .into_par_iter()
             .filter(|(mime, _command)| mime_equal(mime_match, mime))
             .collect();
-        Possible(map)
+        PossibleMimes(map)
     }
 
     /// Removes the mimes and commands that have star mimes like text/*
@@ -133,10 +151,52 @@ impl Possible {
                 mime.subtype().as_str() != "*" && mime.type_().as_str() != "*"
             })
             .collect();
-        Possible(map)
+        PossibleMimes(map)
     }
 
     fn matches_not_one(&self) -> bool {
         self.0.len() > 1
     }
+}
+
+struct PossibleRegexes(HashMap<String, String>);
+
+impl Narrowable for PossibleRegexes {
+    type Compare = String;
+
+    /// Compare is the string filename. It is narrowing down which regex is possibleregexes matches
+    /// the filename.
+    fn narrow(self, compare: String) -> Result<String> {
+        let commands: Vec<String> = self
+            .0
+            .into_par_iter()
+            .map(|(regex_string, command)| Regex::new(&regex_string).map(|regex| (regex, command)))
+            .inspect(|result| {
+                if let Err(e) = result {
+                    warn!("Failed to create regex: {}", e);
+                }
+            })
+            .filter_map(|result| result.ok())
+            .filter(|(regex, _command)| regex.is_match(&compare))
+            .map(|(_regex, command)| command)
+            .collect();
+        if commands.len() > 1 {
+            Ok(choose_with_rofi(&commands)?)
+        } else {
+            Ok(commands.into_iter().collect::<String>())
+        }
+    }
+}
+
+/// Choose the command with rofi
+fn choose_with_rofi(commands: &[String]) -> Result<String> {
+    todo!()
+}
+
+/// Something that can be narrowed down and return a command
+trait Narrowable {
+    type Compare;
+
+    /// Narrow down something according to what is compared against each item
+    fn narrow(self, compare: Self::Compare) -> Result<String>;
 }

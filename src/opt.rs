@@ -1,6 +1,8 @@
 mod subcommand;
 mod ext_mime_path;
 
+use std::path::PathBuf;
+
 use structopt::StructOpt;
 use anyhow::Result;
 
@@ -13,7 +15,11 @@ pub struct Opt {
     #[structopt(flatten)]
     pub verbose: clap_verbosity_flag::Verbosity,
 
+    // #[structopt(parse(from_os_str))]
+    // pub path: Option<PathBuf>,
+
     #[structopt(subcommand)]
+    // pub subcmd: Option<SubCommand>,
     pub subcmd: SubCommand,
 }
 
@@ -23,6 +29,10 @@ pub trait Runable {
 
 impl Runable for Opt {
     fn run(self) -> Result<()> {
+        // match self.subcmd {
+        //     Some(subcmd) => subcmd.run(),
+        //     None => Ok(())
+        // }
         self.subcmd.run()
     }
 }

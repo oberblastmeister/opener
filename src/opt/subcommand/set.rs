@@ -10,9 +10,9 @@ use super::Runable;
 use super::StructOpt;
 use crate::config::EditConfig;
 
-/// Set the correct command for an extension, mime, or path
+/// Options to use for subcommand set
 #[derive(StructOpt, Debug)]
-pub struct Set {
+pub struct SetOptions {
     /// can be a file extension, mime, or path
     #[structopt(parse(try_from_str = parse_addtype))]
     ext_mime_path: ExtMimePath,
@@ -25,7 +25,7 @@ pub struct Set {
     preview: bool,
 }
 
-impl Runable for Set {
+impl Runable for SetOptions {
     fn run(self) -> Result<()> {
         let mut cfg = EditConfig::load()?;
         debug!("Run add is using this config:\n{}", cfg.to_string());

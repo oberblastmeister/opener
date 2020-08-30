@@ -1,0 +1,13 @@
+[[open]]
+# specify the command to use for a mime type to open it under this header
+# Example:
+# 'application/pdf' = 'zathura'
+
+[[open_regex]]
+# specify the command to use for a regex pattern
+
+[[preview]]
+# to specify the command to preview a mime type under the header
+
+[[preview_regex]]
+# specify the command to use for a regex pattern for previewing

@@ -5,5 +5,5 @@ mod utils;
 use utils::{load_to_string, store_string};
 
 pub use open_config::OpenConfig;
-pub use open_config::Possible;
+pub use open_config::PossibleMimes;
 pub use edit_config::EditConfig;

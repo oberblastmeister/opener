@@ -3,19 +3,12 @@ use std::fs::OpenOptions;
 use std::io::ErrorKind;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::str;
 
 use anyhow::{anyhow, bail, Context, Result};
 use directories::ProjectDirs;
 
-const DEFAULT_CONFIG: &'static str = r#"
-[[open]]
-# specify the command to use for a mime type to open it under this header
-# Example:
-# 'application/pdf' = 'zathura'
-
-[[preview]]
-# to specify the command to preview a mime type under the header
-"#;
+const DEFAULT_CONFIG: &'static [u8] = include_bytes!("default_config.toml");
 const EXTENSION: &'static str = "toml";
 const NAME: &'static str = "opener";
 const QUALIFIER: &'static str = "rs";
@@ -47,10 +40,10 @@ fn open_file(path: impl AsRef<Path>) -> Result<File> {
 fn store_default(path: impl AsRef<Path>) -> Result<&'static str> {
     let mut f = open_file(path)?;
 
-    f.write_all(DEFAULT_CONFIG.as_bytes())
+    f.write_all(DEFAULT_CONFIG)
         .context("Failed to write to default config")?;
 
-    Ok(DEFAULT_CONFIG)
+    Ok(str::from_utf8(DEFAULT_CONFIG).expect("BUG: the default config was not utf8"))
 }
 
 /// Loads a file to string or creates a default if it does not exist, then returns the default
