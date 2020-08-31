@@ -109,54 +109,47 @@ impl PossibleMimes {
 
     /// Narrows down the possible commands to one according to the mime type given. Then returns the
     /// proper command that was narrowed down.
-    pub fn narrow(mut self, mime: &Mime) -> String {
-        // first filter them so that only mimes that are equal are kept, including star mimes.
-        // application/* == application/pdf is true
-        self = self.filter_equal(mime);
-        debug!("Matches before narrowing down to 1: {:?}", self);
+    pub fn narrow(mut self, mime: &Mime) -> Result<Option<&str>> {
+        let mime_type = mime.type_().as_str();
+        let mime_subtype = mime.subtype().as_str();
 
-        if self.matches_not_one() {
-            // if there are still more matches, remove the star mimes because each mime type can
-            // only have two possible matches, the specific and star. For example application/pdf
-            // only has two matches, application/pdf and application/*. If star is removed, the
-            // command for application/pdf is left.
-            self = self.remove_star_mimes();
-        }
-        debug!("Matches after narrowing down to 1: {:?}", self);
-
-        // there should only be one match left
-        if self.matches_not_one() {
-            panic!("BUG: matches length should not be greater than 1. Toml file should have non-repeating strings. After removing stars there can only be one match for each mime type.")
+        if mime_type == "*" || mime_subtype == "*" {
+            panic!("mime type must not be that")
         }
 
-        // there is only one match left so this just returns the command associated with it.
-        self.0.into_iter().map(|(_mime, command)| command).collect()
+        let command = self.0.get(mime);
+        if command.is_none() {
+            let mime_star = format!("{}/*", mime_type).parse::<Mime>()?;
+            let star_command = self.0.get(&mime_star);
+            Ok(star_command.map(|s| &**s))
+        } else {
+            Ok(command.map(|s| &**s))
+        }
     }
+    // fn filter_equal(self, mime_match: &Mime) -> Self {
+    //     let map: HashMap<Mime, String> = self
+    //         .0
+    //         .into_par_iter()
+    //         .filter(|(mime, _command)| mime_equal(mime_match, mime))
+    //         .collect();
+    //     PossibleMimes(map)
+    // }
 
-    fn filter_equal(self, mime_match: &Mime) -> Self {
-        let map: HashMap<Mime, String> = self
-            .0
-            .into_par_iter()
-            .filter(|(mime, _command)| mime_equal(mime_match, mime))
-            .collect();
-        PossibleMimes(map)
-    }
+    // /// Removes the mimes and commands that have star mimes like text/*
+    // fn remove_star_mimes(self) -> Self {
+    //     let map: HashMap<Mime, String> = self
+    //         .0
+    //         .into_par_iter()
+    //         .filter(|(mime, _command)| {
+    //             mime.subtype().as_str() != "*" && mime.type_().as_str() != "*"
+    //         })
+    //         .collect();
+    //     PossibleMimes(map)
+    // }
 
-    /// Removes the mimes and commands that have star mimes like text/*
-    fn remove_star_mimes(self) -> Self {
-        let map: HashMap<Mime, String> = self
-            .0
-            .into_par_iter()
-            .filter(|(mime, _command)| {
-                mime.subtype().as_str() != "*" && mime.type_().as_str() != "*"
-            })
-            .collect();
-        PossibleMimes(map)
-    }
-
-    fn matches_not_one(&self) -> bool {
-        self.0.len() > 1
-    }
+    // fn matches_not_one(&self) -> bool {
+    //     self.0.len() > 1
+    // }
 }
 
 struct PossibleRegexes(HashMap<String, String>);
