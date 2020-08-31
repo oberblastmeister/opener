@@ -9,9 +9,9 @@ use subprocess::Exec;
 
 use super::Runable;
 use super::StructOpt;
-use crate::config::Narrowable;
 use crate::config::OpenConfig;
-use crate::config::PossibleRegexes;
+use crate::config::PossibleCommands;
+use crate::config::RegexCommands;
 use crate::mime_helpers::determine_mime;
 
 /// Options to use for subcommand open
@@ -34,22 +34,12 @@ impl Runable for OpenOptions {
     fn run(self) -> Result<()> {
         let open_config = OpenConfig::load()?;
 
+        // use open or preview commands
         let (possibilites, possible_regexes) = if self.preview {
-            let OpenConfig {
-                preview,
-                preview_regex,
-                ..
-            } = open_config;
-            (preview, preview_regex)
+            open_config.get_preview()
         } else {
-            let OpenConfig {
-                open, open_regex, ..
-            } = open_config;
-            (open, open_regex)
+            open_config.get_open()
         };
-
-        let mime = determine_mime(&self.path)?;
-        debug!("Guess: {:?}", mime);
 
         let path_string = self
             .path
@@ -57,9 +47,14 @@ impl Runable for OpenOptions {
             .ok_or(anyhow!("Failed to convert path to string"))?
             .to_owned();
 
-        if run_narrowable(possible_regexes, &path_string, &self.path).is_err() {
+        if run_correct_command_with_fallbacks(possible_regexes, &path_string, &self.path).is_err() {
             info!("Running regex commands failed, trying to run mime commands");
-            if run_narrowable(possibilites, &mime, &self.path).is_err() {
+
+            // determine the mime of the path to compare with the mime commands
+            let mime = determine_mime(&self.path)?;
+            debug!("Guess: {:?}", mime);
+
+            if run_correct_command_with_fallbacks(possibilites, &mime, &self.path).is_err() {
                 info!("Running mime commands failed, trying to use xdg_open");
                 xdg_open(&self.path)?;
             }
@@ -69,26 +64,28 @@ impl Runable for OpenOptions {
     }
 }
 
-fn run_narrowable<T: Narrowable>(
-    possible_regexes: Vec<T>,
+fn run_correct_command_with_fallbacks<T: PossibleCommands>(
+    possible_commands_fallbacks: Vec<T>,
     compare: &T::Compare,
     path: impl AsRef<Path>,
 ) -> Result<()> {
-    for possible_regex in possible_regexes {
-        let command = possible_regex.narrow(compare)?;
-
-        if command.is_none() {
-            bail!("No command to run");
-        }
+    for fallback in possible_commands_fallbacks {
+        let command = fallback.find_correct_command(compare)?;
 
         if let Some(cmd) = command {
             match run_shell_command(&cmd, &path) {
                 Ok(_) => return Ok(()),
                 Err(e) => Err(e)?,
             }
+        } else {
+            // if there is no command specified, go to the next fall back
+            continue;
         }
     }
-    Ok(())
+
+    // if the code has gotten here, the code has checked all fallbacks and no command was found for
+    // the compare. Return an error that no commands were found
+    bail!("No command found for compare");
 }
 
 /// Open something using the default program on the system
@@ -110,14 +107,5 @@ fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
         );
     }
 
-    Ok(())
-}
-
-fn rofi_open(commands: &Vec<String>, path: impl AsRef<Path>) -> Result<()> {
-    match rofi::Rofi::new(commands).run() {
-        Ok(choice) => run_shell_command(&choice, path)?,
-        Err(rofi::Error::Interrupted) => info!("Rofi was interrupted"),
-        Err(e) => Err(e)?,
-    }
     Ok(())
 }

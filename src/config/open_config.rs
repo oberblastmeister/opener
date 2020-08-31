@@ -10,16 +10,16 @@ use serde_derive::Deserialize;
 use super::load_to_string;
 use crate::mime_helpers::*;
 
-type PossibleStrings = HashMap<String, String>;
+type StringCommands = HashMap<String, String>;
 
 /// What the config will serialize into at first. This will then be converted into `OpenConfig` to
 /// use `Mime`s instead of `String`s.
 #[derive(Debug, Default, Deserialize)]
 struct OpenConfigString {
-    open: Vec<PossibleStrings>,
-    open_regex: Vec<PossibleRegexes>,
-    preview: Vec<PossibleStrings>,
-    preview_regex: Vec<PossibleRegexes>,
+    open: Vec<StringCommands>,
+    open_regex: Vec<RegexCommands>,
+    preview: Vec<StringCommands>,
+    preview_regex: Vec<RegexCommands>,
 }
 
 impl OpenConfigString {
@@ -38,8 +38,8 @@ impl OpenConfigString {
             preview,
             preview_regex,
         } = self;
-        let open = PossibleMimes::new_vec(open);
-        let preview = PossibleMimes::new_vec(preview);
+        let open = MimeCommands::new_vec(open);
+        let preview = MimeCommands::new_vec(preview);
         OpenConfig {
             open,
             open_regex,
@@ -55,10 +55,10 @@ impl OpenConfigString {
 /// files and will only need read-only data.
 #[derive(Debug)]
 pub struct OpenConfig {
-    pub open: Vec<PossibleMimes>,
-    pub open_regex: Vec<PossibleRegexes>,
-    pub preview: Vec<PossibleMimes>,
-    pub preview_regex: Vec<PossibleRegexes>,
+    pub open: Vec<MimeCommands>,
+    pub open_regex: Vec<RegexCommands>,
+    pub preview: Vec<MimeCommands>,
+    pub preview_regex: Vec<RegexCommands>,
 }
 
 impl OpenConfig {
@@ -66,24 +66,43 @@ impl OpenConfig {
     pub fn load() -> Result<Self> {
         Ok(OpenConfigString::load()?.convert())
     }
+
+    pub fn get_preview(self) -> (Vec<MimeCommands>, Vec<RegexCommands>) {
+        match self {
+            OpenConfig {
+                preview,
+                preview_regex,
+                ..
+            } => (preview, preview_regex),
+        }
+    }
+
+    pub fn get_open(self) -> (Vec<MimeCommands>, Vec<RegexCommands>) {
+        match self {
+            OpenConfig {
+                open, open_regex, ..
+            } => (open, open_regex),
+        }
+    }
 }
 
 /// Something that can be narrowed down and return a command
-pub trait Narrowable {
+pub trait PossibleCommands {
     type Compare;
 
-    /// Narrow down something according to what is compared against each item
-    fn narrow(self, compare: &Self::Compare) -> Result<Option<String>>;
+    /// Narrow down something according to what is compared against each item and return the
+    /// command associated with that item
+    fn find_correct_command(self, compare: &Self::Compare) -> Result<Option<String>>;
 }
 
 /// The possible mimes and commands that can be used to open a file
 #[derive(Debug)]
-pub struct PossibleMimes(HashMap<Mime, String>);
+pub struct MimeCommands(HashMap<Mime, String>);
 
-impl PossibleMimes {
+impl MimeCommands {
     /// Converts a hashmap of mime strings and commands into a hashmap of mimes and commands. This
     /// function will log the errors using warn! and then discard them.
-    pub fn new(map: PossibleStrings) -> PossibleMimes {
+    pub fn new(map: StringCommands) -> MimeCommands {
         let converted: HashMap<Mime, String> = map
             .into_par_iter()
             .map(|(mime_str, command)| {
@@ -104,43 +123,23 @@ impl PossibleMimes {
             .collect();
         debug!("mime_strs were parsed into mime_types: {:?}", converted);
 
-        PossibleMimes(converted)
+        MimeCommands(converted)
     }
 
     /// Creates a new vector of possibles. The first possible is the main one used while the other
     /// ones are just fall backs
-    pub fn new_vec(map: Vec<PossibleStrings>) -> Vec<PossibleMimes> {
+    pub fn new_vec(map: Vec<StringCommands>) -> Vec<MimeCommands> {
         map.into_par_iter()
-            .map(|hashmap| PossibleMimes::new(hashmap))
+            .map(|hashmap| MimeCommands::new(hashmap))
             .collect()
-    }
-
-    /// Narrows down the possible commands to one according to the mime type given. Then returns the
-    /// proper command that was narrowed down.
-    pub fn narrow(&self, mime: &Mime) -> Result<Option<&String>> {
-        let mime_type = mime.type_().as_str();
-        let mime_subtype = mime.subtype().as_str();
-
-        if mime_type == "*" || mime_subtype == "*" {
-            panic!("mime type must not be that")
-        }
-
-        let command = self.0.get(mime);
-        if command.is_none() {
-            let mime_star = format!("{}/*", mime_type).parse::<Mime>()?;
-            let star_command = self.0.get(&mime_star);
-            Ok(star_command)
-        } else {
-            Ok(command)
-        }
     }
 }
 
-impl Narrowable for PossibleMimes {
+impl PossibleCommands for MimeCommands {
     type Compare = Mime;
 
     /// proper command that was narrowed down.
-    fn narrow(self, mime: &Mime) -> Result<Option<String>> {
+    fn find_correct_command(self, mime: &Mime) -> Result<Option<String>> {
         let mime_type = mime.type_().as_str();
         let mime_subtype = mime.subtype().as_str();
 
@@ -161,14 +160,14 @@ impl Narrowable for PossibleMimes {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PossibleRegexes(HashMap<String, String>);
+pub struct RegexCommands(HashMap<String, String>);
 
-impl Narrowable for PossibleRegexes {
+impl PossibleCommands for RegexCommands {
     type Compare = String;
 
     /// Compare is the string filename. It is narrowing down which regex is possibleregexes matches
     /// the filename.
-    fn narrow(self, compare: &String) -> Result<Option<String>> {
+    fn find_correct_command(self, compare: &String) -> Result<Option<String>> {
         // filter out all the commands that have a regex that match
         let commands: Vec<String> = self
             .0

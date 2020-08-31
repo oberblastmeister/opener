@@ -5,7 +5,7 @@ mod utils;
 use utils::{load_to_string, store_string};
 
 pub use open_config::OpenConfig;
-pub use open_config::PossibleMimes;
-pub use open_config::Narrowable;
-pub use open_config::PossibleRegexes;
+pub use open_config::MimeCommands;
+pub use open_config::PossibleCommands;
+pub use open_config::RegexCommands;
 pub use edit_config::EditConfig;
