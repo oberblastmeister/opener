@@ -9,7 +9,9 @@ use subprocess::Exec;
 
 use super::Runable;
 use super::StructOpt;
+use crate::config::Narrowable;
 use crate::config::OpenConfig;
+use crate::config::PossibleRegexes;
 use crate::mime_helpers::determine_mime;
 
 /// Options to use for subcommand open
@@ -54,16 +56,9 @@ impl Runable for OpenOptions {
             .to_str()
             .ok_or(anyhow!("Failed to convert path to string"))?;
 
-        for possible_regex in possible_regexes {
-            let narrowed: Vec<(Regex, String)> = possible_regex
-                .into_par_iter()
-                .map(|(regex, command)| (Regex::new(&regex), command))
-                // TODO, needs to add warning if regex doesn't work
-                // filter errors
-                .filter_map(|(res, value)| res.ok().map(|regex| (regex, value)))
-                // filter the pairs that match the path str
-                .filter(|(regex, _command)| regex.is_match(path_str))
-                .collect();
+        match run_possible_regexes(possible_regexes, &self.path) {
+            Ok(()) => return Ok(()),
+            Err(e) => Err(e)?,
         }
 
         // wheather and of the commands specified in config file was run succesfully
@@ -97,6 +92,28 @@ impl Runable for OpenOptions {
     }
 }
 
+fn run_possible_regexes(
+    possible_regexes: Vec<PossibleRegexes>,
+    path: impl AsRef<Path>,
+) -> Result<()> {
+    for possible_regex in possible_regexes {
+        let command = possible_regex.narrow(
+            &path
+                .as_ref()
+                .to_str()
+                .ok_or(anyhow!("Could not convert path to utf8 string"))?
+                .to_owned(),
+        )?;
+
+        if let Some(cmd) = command {
+            match run_shell_command(&cmd, &path) {
+                Ok(_) => return Ok(()),
+                Err(e) => Err(e)?,
+            }
+        }
+    }
+    Ok(())
+}
 /// Open something using the default program on the system
 fn xdg_open(path: impl AsRef<Path>) -> Result<()> {
     open::that(path.as_ref().as_os_str()).context("Failed to use xdg-open")?;
@@ -116,5 +133,14 @@ fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
         );
     }
 
+    Ok(())
+}
+
+fn rofi_open(commands: &Vec<String>, path: impl AsRef<Path>) -> Result<()> {
+    match rofi::Rofi::new(commands).run() {
+        Ok(choice) => run_shell_command(&choice, path)?,
+        Err(rofi::Error::Interrupted) => info!("Rofi was interrupted"),
+        Err(e) => Err(e)?,
+    }
     Ok(())
 }

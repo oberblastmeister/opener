@@ -6,4 +6,6 @@ use utils::{load_to_string, store_string};
 
 pub use open_config::OpenConfig;
 pub use open_config::PossibleMimes;
+pub use open_config::Narrowable;
+pub use open_config::PossibleRegexes;
 pub use edit_config::EditConfig;

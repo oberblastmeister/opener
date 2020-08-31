@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use log::*;
 use mime::Mime;
 use rayon::prelude::*;
@@ -17,9 +17,9 @@ type PossibleStrings = HashMap<String, String>;
 #[derive(Debug, Default, Deserialize)]
 struct OpenConfigString {
     open: Vec<PossibleStrings>,
-    open_regex: Vec<PossibleStrings>,
+    open_regex: Vec<PossibleRegexes>,
     preview: Vec<PossibleStrings>,
-    preview_regex: Vec<PossibleStrings>,
+    preview_regex: Vec<PossibleRegexes>,
 }
 
 impl OpenConfigString {
@@ -56,9 +56,9 @@ impl OpenConfigString {
 #[derive(Debug)]
 pub struct OpenConfig {
     pub open: Vec<PossibleMimes>,
-    pub open_regex: Vec<PossibleStrings>,
+    pub open_regex: Vec<PossibleRegexes>,
     pub preview: Vec<PossibleMimes>,
-    pub preview_regex: Vec<PossibleStrings>,
+    pub preview_regex: Vec<PossibleRegexes>,
 }
 
 impl OpenConfig {
@@ -66,6 +66,14 @@ impl OpenConfig {
     pub fn load() -> Result<Self> {
         Ok(OpenConfigString::load()?.convert())
     }
+}
+
+/// Something that can be narrowed down and return a command
+pub trait Narrowable {
+    type Compare;
+
+    /// Narrow down something according to what is compared against each item
+    fn narrow(self, compare: &Self::Compare) -> Result<Option<String>>;
 }
 
 /// The possible mimes and commands that can be used to open a file
@@ -109,7 +117,7 @@ impl PossibleMimes {
 
     /// Narrows down the possible commands to one according to the mime type given. Then returns the
     /// proper command that was narrowed down.
-    pub fn narrow(mut self, mime: &Mime) -> Result<Option<&str>> {
+    pub fn narrow(&self, mime: &Mime) -> Result<Option<&String>> {
         let mime_type = mime.type_().as_str();
         let mime_subtype = mime.subtype().as_str();
 
@@ -121,75 +129,83 @@ impl PossibleMimes {
         if command.is_none() {
             let mime_star = format!("{}/*", mime_type).parse::<Mime>()?;
             let star_command = self.0.get(&mime_star);
-            Ok(star_command.map(|s| &**s))
+            Ok(star_command)
         } else {
-            Ok(command.map(|s| &**s))
+            Ok(command)
         }
     }
-    // fn filter_equal(self, mime_match: &Mime) -> Self {
-    //     let map: HashMap<Mime, String> = self
-    //         .0
-    //         .into_par_iter()
-    //         .filter(|(mime, _command)| mime_equal(mime_match, mime))
-    //         .collect();
-    //     PossibleMimes(map)
-    // }
-
-    // /// Removes the mimes and commands that have star mimes like text/*
-    // fn remove_star_mimes(self) -> Self {
-    //     let map: HashMap<Mime, String> = self
-    //         .0
-    //         .into_par_iter()
-    //         .filter(|(mime, _command)| {
-    //             mime.subtype().as_str() != "*" && mime.type_().as_str() != "*"
-    //         })
-    //         .collect();
-    //     PossibleMimes(map)
-    // }
-
-    // fn matches_not_one(&self) -> bool {
-    //     self.0.len() > 1
-    // }
 }
 
-struct PossibleRegexes(HashMap<String, String>);
+impl Narrowable for PossibleMimes {
+    type Compare = Mime;
+
+    /// proper command that was narrowed down.
+    fn narrow(self, mime: &Mime) -> Result<Option<String>> {
+        let mime_type = mime.type_().as_str();
+        let mime_subtype = mime.subtype().as_str();
+
+        if mime_type == "*" || mime_subtype == "*" {
+            panic!("mime type must not be that")
+        }
+
+        let command = self.0.get(mime);
+        if command.is_none() {
+            let mime_star = format!("{}/*", mime_type).parse::<Mime>()?;
+            // let star_command = self.0[&mime_star]
+            let star_command = self.0.get(&mime_star);
+            Ok(star_command.map(|s| s.to_owned()))
+        } else {
+            Ok(command.map(|s| s.to_owned()))
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PossibleRegexes(HashMap<String, String>);
 
 impl Narrowable for PossibleRegexes {
     type Compare = String;
 
     /// Compare is the string filename. It is narrowing down which regex is possibleregexes matches
     /// the filename.
-    fn narrow(self, compare: String) -> Result<String> {
+    fn narrow(self, compare: &String) -> Result<Option<String>> {
+        // filter out all the commands that have a regex that match
         let commands: Vec<String> = self
             .0
             .into_par_iter()
             .map(|(regex_string, command)| Regex::new(&regex_string).map(|regex| (regex, command)))
+            // log regex errors
             .inspect(|result| {
                 if let Err(e) = result {
                     warn!("Failed to create regex: {}", e);
                 }
             })
+            // keep successes
             .filter_map(|result| result.ok())
+            // filter matches
             .filter(|(regex, _command)| regex.is_match(&compare))
+            // only get commands
             .map(|(_regex, command)| command)
             .collect();
+
         if commands.len() > 1 {
-            Ok(choose_with_rofi(&commands)?)
+            info!("Commands are being chosen with rofi");
+            Ok(Some(choose_with_rofi(&commands)?))
+        } else if commands.len() == 0 {
+            info!("No regex commands were found");
+            Ok(None)
         } else {
-            Ok(commands.into_iter().collect::<String>())
+            info!("One regex command was found.");
+            Ok(Some(commands.into_iter().collect::<String>()))
         }
     }
 }
 
 /// Choose the command with rofi
-fn choose_with_rofi(commands: &[String]) -> Result<String> {
-    todo!()
-}
-
-/// Something that can be narrowed down and return a command
-trait Narrowable {
-    type Compare;
-
-    /// Narrow down something according to what is compared against each item
-    fn narrow(self, compare: Self::Compare) -> Result<String>;
+fn choose_with_rofi(commands: &Vec<String>) -> Result<String> {
+    match rofi::Rofi::new(commands).run() {
+        Ok(choice) => Ok(choice),
+        Err(rofi::Error::Interrupted) => bail!("Rofi was interrupted"),
+        Err(e) => Err(e)?,
+    }
 }
