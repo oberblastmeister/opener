@@ -51,59 +51,35 @@ impl Runable for OpenOptions {
         let mime = determine_mime(&self.path)?;
         debug!("Guess: {:?}", mime);
 
-        let path_str = self
+        let path_string = self
             .path
             .to_str()
-            .ok_or(anyhow!("Failed to convert path to string"))?;
+            .ok_or(anyhow!("Failed to convert path to string"))?
+            .to_owned();
 
-        match run_possible_regexes(possible_regexes, &self.path) {
-            Ok(()) => return Ok(()),
-            Err(e) => Err(e)?,
-        }
-
-        // wheather and of the commands specified in config file was run succesfully
-        let mut command_successful = false;
-        for possible in possibilites {
-            // finds the correct command according to the mime
-            let command = possible.narrow(&mime)?;
-            // checks if there is a command
-            if let Some(cmd) = command {
-                // if there is run a shell command
-                if run_shell_command(cmd, &self.path).is_ok() {
-                    command_successful = true;
-                    info!("Shell command ran and was successful");
-                    break;
-                } else {
-                    info!("Shell command was not successful");
-                }
-            } else {
-                info!("No command was specified in .toml file, going to next table.");
+        if run_narrowable(possible_regexes, &path_string, &self.path).is_err() {
+            info!("Running regex commands failed, trying to run mime commands");
+            if run_narrowable(possibilites, &mime, &self.path).is_err() {
+                info!("Running mime commands failed, trying to use xdg_open");
+                xdg_open(&self.path)?;
             }
-        }
-
-        // if none of the commands were run succesfully or there were no commands specified, use
-        // xdg-open instead
-        if !command_successful {
-            info!("Using xdg-open instead.");
-            xdg_open(&self.path)?;
         }
 
         Ok(())
     }
 }
 
-fn run_possible_regexes(
-    possible_regexes: Vec<PossibleRegexes>,
+fn run_narrowable<T: Narrowable>(
+    possible_regexes: Vec<T>,
+    compare: &T::Compare,
     path: impl AsRef<Path>,
 ) -> Result<()> {
     for possible_regex in possible_regexes {
-        let command = possible_regex.narrow(
-            &path
-                .as_ref()
-                .to_str()
-                .ok_or(anyhow!("Could not convert path to utf8 string"))?
-                .to_owned(),
-        )?;
+        let command = possible_regex.narrow(compare)?;
+
+        if command.is_none() {
+            bail!("No command to run");
+        }
 
         if let Some(cmd) = command {
             match run_shell_command(&cmd, &path) {
@@ -114,6 +90,7 @@ fn run_possible_regexes(
     }
     Ok(())
 }
+
 /// Open something using the default program on the system
 fn xdg_open(path: impl AsRef<Path>) -> Result<()> {
     open::that(path.as_ref().as_os_str()).context("Failed to use xdg-open")?;
