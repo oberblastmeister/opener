@@ -65,19 +65,6 @@ impl Runable for OpenOptions {
                 .filter(|(regex, _command)| regex.is_match(path_str))
                 .collect();
         }
-        // possible_regexes.into_par_iter()
-        //     .map(|map| {
-        //         map.into_par_iter()
-        //             .map(|(regex, value)| {
-        //                 (Regex::new(regex), value)
-        //             }).collect::<HashMap<Regex, String>>()
-        //     })
-        //     .filter(|map| {
-
-        //     })
-        // for possible_regex in possible_regexes {
-
-        // }
 
         // wheather and of the commands specified in config file was run succesfully
         let mut command_successful = false;
