@@ -70,17 +70,26 @@ impl Runable for OpenOptions {
         let mut command_successful = false;
         for possible in possibilites {
             // finds the correct command according to the mime
-            let command = possible.narrow(&mime);
-            if run_shell_command(&command, &self.path).is_ok() {
-                command_successful = true;
-                break;
+            let command = possible.narrow(&mime)?;
+            // checks if there is a command
+            if let Some(cmd) = command {
+                // if there is run a shell command
+                if run_shell_command(cmd, &self.path).is_ok() {
+                    command_successful = true;
+                    info!("Shell command ran and was successful");
+                    break;
+                } else {
+                    info!("Shell command was not successful");
+                }
+            } else {
+                info!("No command was specified in .toml file, going to next table.");
             }
         }
 
         // if none of the commands were run succesfully or there were no commands specified, use
         // xdg-open instead
         if !command_successful {
-            info!("Using xdg-open instead");
+            info!("Using xdg-open instead.");
             xdg_open(&self.path)?;
         }
 
