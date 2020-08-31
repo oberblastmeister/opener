@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::*;
+use rayon::prelude::*;
+use regex::Regex;
 use subprocess::Exec;
 
 use super::Runable;
@@ -28,20 +30,58 @@ pub struct OpenOptions {
 
 impl Runable for OpenOptions {
     fn run(self) -> Result<()> {
-        let possible = if self.preview {
-            let OpenConfig { open: _, preview } = OpenConfig::load()?;
-            preview
+        let open_config = OpenConfig::load()?;
+
+        let (possibilites, possible_regexes) = if self.preview {
+            let OpenConfig {
+                preview,
+                preview_regex,
+                ..
+            } = open_config;
+            (preview, preview_regex)
         } else {
-            let OpenConfig { open, preview: _ } = OpenConfig::load()?;
-            open
+            let OpenConfig {
+                open, open_regex, ..
+            } = open_config;
+            (open, open_regex)
         };
 
         let mime = determine_mime(&self.path)?;
         debug!("Guess: {:?}", mime);
 
+        let path_str = self
+            .path
+            .to_str()
+            .ok_or(anyhow!("Failed to convert path to string"))?;
+
+        for possible_regex in possible_regexes {
+            let narrowed: Vec<(Regex, String)> = possible_regex
+                .into_par_iter()
+                .map(|(regex, command)| (Regex::new(&regex), command))
+                // TODO, needs to add warning if regex doesn't work
+                // filter errors
+                .filter_map(|(res, value)| res.ok().map(|regex| (regex, value)))
+                // filter the pairs that match the path str
+                .filter(|(regex, _command)| regex.is_match(path_str))
+                .collect();
+        }
+        // possible_regexes.into_par_iter()
+        //     .map(|map| {
+        //         map.into_par_iter()
+        //             .map(|(regex, value)| {
+        //                 (Regex::new(regex), value)
+        //             }).collect::<HashMap<Regex, String>>()
+        //     })
+        //     .filter(|map| {
+
+        //     })
+        // for possible_regex in possible_regexes {
+
+        // }
+
         // wheather and of the commands specified in config file was run succesfully
         let mut command_successful = false;
-        for possible in possible {
+        for possible in possibilites {
             // finds the correct command according to the mime
             let command = possible.narrow(&mime);
             if run_shell_command(&command, &self.path).is_ok() {
