@@ -8,7 +8,6 @@ use regex::Regex;
 use serde_derive::Deserialize;
 
 use super::load_to_string;
-use crate::mime_helpers::*;
 
 type StringCommands = HashMap<String, String>;
 
