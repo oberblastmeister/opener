@@ -51,3 +51,42 @@ impl EditConfig {
         self.doc.to_string()
     }
 }
+
+/// Can only be used in while let Some(value) = streaming_iterator.next()
+trait StreamingIteratorMut {
+    type Item: ?Sized;
+
+    fn advance(&mut self);
+    fn get_mut(&mut self) -> Option<&mut Self::Item>;
+    fn next(&mut self) -> Option<&mut Self::Item> {
+        self.advance();
+        let item = (*self).get_mut();
+        item
+    }
+}
+
+struct ArrayOfTablesIterMut<'a> {
+    idx: isize,
+    array: &'a mut ArrayOfTables
+}
+
+impl<'a> StreamingIteratorMut for ArrayOfTablesIterMut<'a> {
+    type Item = Table;
+
+    fn advance(&mut self) {
+        self.idx += 1;
+    }
+
+    fn get_mut(&mut self) -> Option<&mut Table> {
+        self.array.get_mut(self.idx as usize)
+    }
+}
+
+impl<'a> ArrayOfTablesIterMut<'a> {
+    fn new(array: &'a mut ArrayOfTables) -> Self {
+        ArrayOfTablesIterMut {
+            idx: -1,
+            array,
+        }
+    }
+}
