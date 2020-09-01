@@ -43,6 +43,14 @@ impl EditConfig {
         Ok(array)
     }
 
+    pub fn get_open_iter_mut(&mut self) -> Result<ArrayOfTablesIterMut> {
+        Ok(ArrayOfTablesIterMut::new(self.get_open()?))
+    }
+
+    pub fn get_preview_iter_mut(&mut self) -> Result<ArrayOfTablesIterMut> {
+        Ok(ArrayOfTablesIterMut::new(self.get_preview()?))
+    }
+
     pub fn store(&self) -> Result<()> {
         store_string(&self.doc.to_string())
     }
@@ -53,7 +61,7 @@ impl EditConfig {
 }
 
 /// Can only be used in while let Some(value) = streaming_iterator.next()
-trait StreamingIteratorMut {
+pub trait StreamingIteratorMut {
     type Item: ?Sized;
 
     fn advance(&mut self);
@@ -65,7 +73,7 @@ trait StreamingIteratorMut {
     }
 }
 
-struct ArrayOfTablesIterMut<'a> {
+pub struct ArrayOfTablesIterMut<'a> {
     idx: isize,
     array: &'a mut ArrayOfTables
 }
@@ -83,10 +91,16 @@ impl<'a> StreamingIteratorMut for ArrayOfTablesIterMut<'a> {
 }
 
 impl<'a> ArrayOfTablesIterMut<'a> {
-    fn new(array: &'a mut ArrayOfTables) -> Self {
+    pub fn new(array: &'a mut ArrayOfTables) -> Self {
         ArrayOfTablesIterMut {
             idx: -1,
             array,
         }
+    }
+
+    pub fn append_single_entry_table(&mut self, key: &str, value: String) {
+        let mut table = toml_edit::Table::new();
+        table[key] = toml_edit::value(value);
+        self.array.append(table);
     }
 }
