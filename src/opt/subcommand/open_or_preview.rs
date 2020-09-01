@@ -1,17 +1,14 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use log::*;
-use rayon::prelude::*;
-use regex::Regex;
 use subprocess::Exec;
 
 use super::Runable;
 use super::StructOpt;
 use crate::config::OpenConfig;
 use crate::config::PossibleCommands;
-use crate::config::RegexCommands;
 use crate::mime_helpers::determine_mime;
 
 /// Options to use for subcommand open
@@ -36,18 +33,19 @@ impl Runable for OpenOptions {
 
         // use open or preview commands
         let (possibilites, possible_regexes) = if self.preview {
+            info!("Running preview");
             open_config.get_preview()
         } else {
+            info!("Running open");
             open_config.get_open()
         };
 
-        let path_string = self
+        let path_str = self
             .path
             .to_str()
-            .ok_or(anyhow!("Failed to convert path to string"))?
-            .to_owned();
+            .ok_or(anyhow!("Failed to convert path to string"))?;
 
-        if run_correct_command_with_fallbacks(possible_regexes, &path_string, &self.path).is_err() {
+        if run_correct_command_with_fallbacks(possible_regexes, path_str, &self.path).is_err() {
             info!("Running regex commands failed, trying to run mime commands");
 
             // determine the mime of the path to compare with the mime commands
@@ -73,7 +71,7 @@ fn run_correct_command_with_fallbacks<T: PossibleCommands>(
         let command = fallback.find_correct_command(compare)?;
 
         if let Some(cmd) = command {
-            match run_shell_command(&cmd, &path) {
+            match run_shell_command_with_path(&cmd, &path) {
                 Ok(_) => return Ok(()),
                 Err(e) => Err(e)?,
             }
@@ -95,16 +93,31 @@ fn xdg_open(path: impl AsRef<Path>) -> Result<()> {
 }
 
 /// Run shell command and return Ok(()) if successful
-fn run_shell_command(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
-    let path = path.as_ref();
-    let exit_status = Exec::shell(cmd).join()?;
+fn run_shell_command_with_path(cmd: &str, path: impl AsRef<Path>) -> Result<()> {
+    debug!("part command is `{}`", cmd);
+
+    //convert path to string
+    let path = path
+        .as_ref()
+        .to_str()
+        .ok_or(anyhow!("Failed to convert path to string"))?;
+    // add path to end of command with space if there is no $f
+    let cmd = if cmd.find("$f").is_none() {
+        format!("{} {}", cmd, path)
+    } else {
+        // else replace $f with the path
+        cmd.replace("$f", path)
+    };
+    debug!("full command is `{}`", &cmd);
+
+    let exit_status = Exec::shell(&cmd)
+        .detached()
+        .popen()?
+        .wait_timeout(Duration::from_secs(5))?
+        .ok_or(anyhow!("No exit status, command took too long"))?;
 
     if !exit_status.success() {
-        bail!(
-            "The child command {} with path {} failed",
-            cmd,
-            path.display()
-        );
+        bail!("The child command {}", &cmd,);
     }
 
     Ok(())

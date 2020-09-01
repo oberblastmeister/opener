@@ -7,7 +7,6 @@ use std::io::Write;
 use std::process;
 
 use anyhow::Result;
-use env_logger::fmt::Formatter;
 use env_logger::Builder;
 use log::*;
 use structopt::StructOpt;
@@ -26,7 +25,6 @@ fn start_logger(opt: &Opt) {
             writeln!(
                 buf,
                 "{}: {}",
-                // buf.default_styled_level(record.level()),
                 level_style.value(record.level()),
                 record.args()
             )

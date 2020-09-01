@@ -2,27 +2,6 @@ use anyhow::{bail, Context, Result};
 use mime::Mime;
 use std::path::Path;
 
-pub fn mime_equal(m1: &Mime, m2: &Mime) -> bool {
-    let m1_type = m1.type_().as_str();
-    let m1_subtype = m1.subtype().as_str();
-    let m2_type = m2.type_().as_str();
-    let m2_subtype = m2.subtype().as_str();
-
-    if m1 == m2 {
-        return true;
-    }
-
-    if m1_type == m2_type {
-        if m2_subtype == "*" {
-            return true;
-        } else if m1_subtype == "*" {
-            return true;
-        }
-    }
-
-    false
-}
-
 fn tree_magic_mime(path: impl AsRef<Path>) -> Result<Mime> {
     let path = path.as_ref();
     if !path.exists() {

@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use log::*;
 use std::io::{stdout, Write};
 
 use super::parse_addtype;

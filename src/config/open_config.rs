@@ -87,7 +87,7 @@ impl OpenConfig {
 
 /// Something that can be narrowed down and return a command
 pub trait PossibleCommands {
-    type Compare;
+    type Compare: ?Sized;
 
     /// Narrow down something according to what is compared against each item and return the
     /// command associated with that item
@@ -162,11 +162,11 @@ impl PossibleCommands for MimeCommands {
 pub struct RegexCommands(HashMap<String, String>);
 
 impl PossibleCommands for RegexCommands {
-    type Compare = String;
+    type Compare = str;
 
     /// Compare is the string filename. It is narrowing down which regex is possibleregexes matches
     /// the filename.
-    fn find_correct_command(self, compare: &String) -> Result<Option<String>> {
+    fn find_correct_command(self, compare: &str) -> Result<Option<String>> {
         // filter out all the commands that have a regex that match
         let commands: Vec<String> = self
             .0
