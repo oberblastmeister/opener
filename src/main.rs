@@ -3,9 +3,11 @@ mod error;
 mod mime_helpers;
 mod opt;
 
+use std::io::Write;
 use std::process;
 
 use anyhow::Result;
+use env_logger::fmt::Formatter;
 use env_logger::Builder;
 use log::*;
 use structopt::StructOpt;
@@ -17,6 +19,18 @@ use opt::Runable;
 /// Start the logger depending on the verbosity flag
 fn start_logger(opt: &Opt) {
     Builder::from_default_env()
+        .format(|buf, record| {
+            let mut level_style = buf.default_level_style(record.level());
+            level_style.set_bold(true);
+
+            writeln!(
+                buf,
+                "{}: {}",
+                // buf.default_styled_level(record.level()),
+                level_style.value(record.level()),
+                record.args()
+            )
+        })
         .filter_level(
             opt.verbose
                 .log_level()
